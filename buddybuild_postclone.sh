@@ -1,4 +1,5 @@
 #!/bin/sh
+exit 0
 
 # Definitions
 gitPath=$(git rev-parse --show-toplevel)
