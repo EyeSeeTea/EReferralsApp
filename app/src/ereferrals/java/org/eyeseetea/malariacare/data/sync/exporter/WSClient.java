@@ -5,7 +5,7 @@ import android.util.Log;
 
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 
-import org.eyeseetea.malariacare.R;
+import org.eyeseetea.malariacare.data.database.utils.PreferencesEReferral;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.sync.exporter.model.SurveyContainerWSObject;
 import org.eyeseetea.malariacare.data.sync.exporter.model.SurveyWSResult;
@@ -27,7 +27,7 @@ public class WSClient {
     private Context mContext;
     private SurveyApiClientRetrofit mSurveyApiClientRetrofit;
 
-    public WSClient() {
+    public WSClient() throws IllegalArgumentException{
         mContext = PreferencesState.getInstance().getContext();
 
         HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
@@ -36,7 +36,7 @@ public class WSClient {
 
 
         mRetrofit = new Retrofit.Builder()
-                .baseUrl(mContext.getString(R.string.ws_base_url))
+                .baseUrl(PreferencesEReferral.getWSURL())
                 .addConverterFactory(JacksonConverterFactory.create())
                 .client(client)
                 .build();
