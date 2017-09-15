@@ -7,9 +7,10 @@ import com.raizlabs.android.dbflow.sql.migration.BaseMigration;
 import com.raizlabs.android.dbflow.structure.database.DatabaseWrapper;
 
 import org.eyeseetea.malariacare.data.database.AppDatabase;
-import org.eyeseetea.malariacare.data.database.model.Question;
+import org.eyeseetea.malariacare.data.database.model.QuestionDB;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.populatedb.UpdateDB;
+import org.eyeseetea.malariacare.domain.exception.PostMigrationException;
 
 import java.io.IOException;
 import java.util.List;
@@ -27,7 +28,7 @@ public class Migration7UpdateOptionAttributeBackground extends BaseMigration {
         postMigrationRequired = false;
     }
 
-    public static void postMigrate() {
+    public static void postMigrate() throws PostMigrationException {
         //Migration NOT required -> done
         Log.d(TAG, "Post migrate");
         if (!instance.postMigrationRequired) {
@@ -38,7 +39,7 @@ public class Migration7UpdateOptionAttributeBackground extends BaseMigration {
             try {
                 UpdateDB.updateOptionAttributes(PreferencesState.getInstance().getContext());
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new PostMigrationException(e);
             }
         }
 
@@ -56,8 +57,8 @@ public class Migration7UpdateOptionAttributeBackground extends BaseMigration {
 
 
     private boolean hasData() {
-        List<Question> questions = Question.getAllQuestions();
+        List<QuestionDB> questionDBs = QuestionDB.getAllQuestions();
 
-        return questions != null && questions.size() > 0;
+        return questionDBs != null && questionDBs.size() > 0;
     }
 }

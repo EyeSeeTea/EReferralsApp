@@ -44,11 +44,13 @@ import android.widget.TabWidget;
 import android.widget.TextView;
 
 import org.eyeseetea.malariacare.data.authentication.AuthenticationManager;
-import org.eyeseetea.malariacare.data.database.model.Survey;
-import org.eyeseetea.malariacare.data.database.model.User;
+import org.eyeseetea.malariacare.data.database.model.SurveyDB;
+import org.eyeseetea.malariacare.data.database.model.UserDB;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.Session;
 import org.eyeseetea.malariacare.domain.boundary.IAuthenticationManager;
+import org.eyeseetea.malariacare.domain.exception.ApiCallException;
+import org.eyeseetea.malariacare.domain.exception.LoadingNavigationControllerException;
 import org.eyeseetea.malariacare.domain.usecase.LogoutUseCase;
 import org.eyeseetea.malariacare.fragments.ReviewFragment;
 import org.eyeseetea.malariacare.fragments.SurveyFragment;
@@ -94,6 +96,13 @@ public class DashboardActivity extends BaseActivity {
      */
     private boolean isReadOnly = false;
 
+    private boolean mIsInForegroundMode;
+
+    // Some function.
+    public boolean isInForeground() {
+        return mIsInForegroundMode;
+    }
+
     //Show dialog exception from class without activity.
     public static void showException(final String title, final String errorMessage) {
         String dialogTitle = "", dialogMessage = "";
@@ -110,6 +119,7 @@ public class DashboardActivity extends BaseActivity {
                 .setNeutralButton(android.R.string.ok, null)
                 .create().show();
     }
+
     //Show dialog exception from class without activity.
     public static void closeUserFromService(final int title, final String errorMessage) {
         AnnouncementMessageDialog.closeUser(title, errorMessage, dashboardActivity);
@@ -123,10 +133,14 @@ public class DashboardActivity extends BaseActivity {
                 context.getResources().getString(R.string.sent_data));
         if (GradleVariantConfig.isStockFragmentActive()) {
             setTab(context.getResources().getString(R.string.tab_tag_stock), R.id.tab_stock_layout,
-                    context.getResources().getString(R.string.tab_tag_stock));
+                    context.getResources().getString(R.string.tab_stock));
+        }
+        if (GradleVariantConfig.isAVFragmentActive()) {
+            setTab(context.getResources().getString(R.string.tab_tag_av), R.id.tab_av_layout,
+                    context.getResources().getString(R.string.tab_av));
         }
         setTab(context.getResources().getString(R.string.tab_tag_monitor), R.id.tab_monitor_layout,
-                context.getResources().getString(R.string.monitoring_title));
+                context.getResources().getString(R.string.common_menu_statistics));
         if (GradleVariantConfig.isStockFragmentActive()) {
             initStock();
         }
@@ -141,6 +155,10 @@ public class DashboardActivity extends BaseActivity {
         if (GradleVariantConfig.isStockFragmentActive()) {
             setTab(context.getResources().getString(R.string.tab_tag_stock), R.id.tab_stock_layout,
                     context.getResources().getDrawable(R.drawable.tab_stock));
+        }
+        if (GradleVariantConfig.isAVFragmentActive()) {
+            setTab(context.getResources().getString(R.string.tab_tag_av), R.id.tab_av_layout,
+                    context.getResources().getDrawable(R.drawable.statics));
         }
         setTab(context.getResources().getString(R.string.tab_tag_monitor), R.id.tab_monitor_layout,
                 context.getResources().getDrawable(R.drawable.tab_monitor));
@@ -261,6 +279,13 @@ public class DashboardActivity extends BaseActivity {
     }
 
     /**
+     * This method initializes the AV fragment
+     */
+    public void initAV() {
+        mDashboardActivityStrategy.showAVFragment();
+    }
+
+    /**
      * This method initializes the Survey fragment
      */
     public void initSurvey() {
@@ -303,12 +328,13 @@ public class DashboardActivity extends BaseActivity {
     }
 
     @Override
-    public void onConfigurationChanged(Configuration newConfig){
+    public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if(BuildConfig.translations) {
+        if (BuildConfig.translations) {
             PreferencesState.getInstance().loadsLanguageInActivity();
         }
     }
+
     @NonNull
     private FragmentTransaction getFragmentTransaction() {
         FragmentTransaction ft = getFragmentManager().beginTransaction();
@@ -341,7 +367,9 @@ public class DashboardActivity extends BaseActivity {
     @Override
     public void onResume() {
         Log.d(TAG, "onResume");
+        mDashboardActivityStrategy.onResume();
         super.onResume();
+        mIsInForegroundMode = true;
     }
 
     @Override
@@ -355,6 +383,7 @@ public class DashboardActivity extends BaseActivity {
     public void onPause() {
         Log.d(TAG, "onPause");
         super.onPause();
+        mIsInForegroundMode = false;
     }
 
     @Override
@@ -393,7 +422,9 @@ public class DashboardActivity extends BaseActivity {
         } else if (isNewHistoricReceiptBalanceFragmentActive()) {
             closeReceiptBalanceFragment();
         } else {
-            confirmExitApp();
+            if (!mDashboardActivityStrategy.onWebViewBackPressed(tabHost)) {
+                confirmExitApp();
+            }
         }
     }
 
@@ -420,9 +451,9 @@ public class DashboardActivity extends BaseActivity {
      */
     private void onSurveyBackPressed() {
         Log.d(TAG, "onBackPressed");
-        Survey survey = Session.getMalariaSurvey();
-        if (!survey.isSent()) {
-            int infoMessage = survey.isInProgress() ? R.string.survey_info_exit_delete
+        SurveyDB surveyDB = Session.getMalariaSurveyDB();
+        if (!surveyDB.isSent()) {
+            int infoMessage = surveyDB.isInProgress() ? R.string.survey_info_exit_delete
                     : R.string.survey_info_exit;
             new AlertDialog.Builder(this)
                     .setTitle(R.string.survey_info_exit)
@@ -462,8 +493,9 @@ public class DashboardActivity extends BaseActivity {
         LayoutUtils.setDashboardActionBar(actionBar);
         tabHost.getTabWidget().setVisibility(View.VISIBLE);
         ScoreRegister.clear();
-        if (Session.getMalariaSurvey() != null) {
-            isSent = Session.getMalariaSurvey().isSent();
+        SurveyDB lastSurvey = Session.getMalariaSurveyDB();
+        if (lastSurvey != null) {
+            isSent = Session.getMalariaSurveyDB().isSent();
         }
         if (isBackPressed) {
             beforeExit();
@@ -474,7 +506,7 @@ public class DashboardActivity extends BaseActivity {
             showUnsentFragment();
         } else {
             showUnsentFragment();
-            mDashboardActivityStrategy.reloadStockFragment(this);
+            mDashboardActivityStrategy.reloadFirstFragment();
         }
     }
 
@@ -506,7 +538,6 @@ public class DashboardActivity extends BaseActivity {
      */
     public void newSurvey(View view) {
         mDashboardActivityStrategy.newSurvey(this);
-        initSurvey();
     }
 
     /**
@@ -538,8 +569,8 @@ public class DashboardActivity extends BaseActivity {
     }
 
     private void reviewSurvey() {
-        DashboardActivity.moveToThisUId = (Session.getMalariaSurvey().getValuesFromDB().get(
-                0).getQuestion()).getUid();
+        DashboardActivity.moveToThisUId = (Session.getMalariaSurveyDB().getValuesFromDB().get(
+                0).getQuestionDB()).getUid();
         hideReview();
     }
 
@@ -606,9 +637,9 @@ public class DashboardActivity extends BaseActivity {
     /**
      * Checks if a dashboardUnsentFragment is active
      */
-    private boolean isFragmentActive(Fragment fragment, int layout) {
+    public boolean isFragmentActive(Fragment fragment, int layout) {
         Fragment currentFragment = this.getFragmentManager().findFragmentById(layout);
-        if (currentFragment.equals(fragment)) {
+        if (currentFragment != null && currentFragment.equals(fragment)) {
             return true;
         }
         return false;
@@ -665,12 +696,15 @@ public class DashboardActivity extends BaseActivity {
         mDashboardActivityStrategy.onCreate();
         dashboardActivity = this;
         setContentView(R.layout.tab_dashboard);
-        Survey.removeInProgress();
+        SurveyDB.removeInProgress();
         if (savedInstanceState == null) {
             initImprove();
             initMonitor();
             if (GradleVariantConfig.isStockFragmentActive()) {
                 initStock();
+            }
+            if (GradleVariantConfig.isAVFragmentActive()) {
+                initAV();
             }
             initAssess();
         }
@@ -715,6 +749,8 @@ public class DashboardActivity extends BaseActivity {
                 } else if (tabId.equalsIgnoreCase(
                         getResources().getString(R.string.tab_tag_monitor))) {
                     mDashboardActivityStrategy.reloadFourthFragment();
+                } else if (tabId.equalsIgnoreCase(getResources().getString(R.string.tab_tag_av))) {
+                    mDashboardActivityStrategy.reloadAVFragment();
                 }
                 tabHost.getCurrentTabView().setBackgroundColor(
                         getResources().getColor(R.color.tab_pressed_background));
@@ -728,11 +764,28 @@ public class DashboardActivity extends BaseActivity {
         getSurveysFromService();
 
         if (BuildConfig.multiuser) {
-            initNavigationController();
+            try {
+                initNavigationController();
+            } catch (LoadingNavigationControllerException ex) {
+                ex.printStackTrace();
+            }
         }
     }
 
-    private void initNavigationController() {
+    /**
+     * Handles resolution callbacks.
+     */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode,
+            Intent data) {
+        Log.d(TAG, String.format("onActivityResult(%d, %d)", requestCode, resultCode));
+        super.onActivityResult(requestCode, resultCode, data);
+
+        //Delegate activity result to media controller
+        mDashboardActivityStrategy.onActivityResult(requestCode, resultCode, data);
+    }
+
+    private void initNavigationController() throws LoadingNavigationControllerException {
         mDashboardActivityStrategy.initNavigationController();
     }
 
@@ -755,17 +808,26 @@ public class DashboardActivity extends BaseActivity {
 
     public void closeUser() {
         AnnouncementMessageDialog.closeUser(R.string.admin_announcement,
-                PreferencesState.getInstance().getContext().getString(R.string.user_close), DashboardActivity.dashboardActivity);
+                PreferencesState.getInstance().getContext().getString(R.string.user_close),
+                DashboardActivity.dashboardActivity);
+    }
+
+    public void refreshStatus() {
+        mDashboardActivityStrategy.reloadFirstFragmentHeader();
     }
 
     public class AsyncAnnouncement extends AsyncTask<Void, Void, Void> {
-        User loggedUser;
+        UserDB mLoggedUserDB;
 
         @Override
         protected Void doInBackground(Void... params) {
-            loggedUser = User.getLoggedUser();
-            if (loggedUser != null) {
-                loggedUser = ServerAPIController.pullUserAttributes(loggedUser);
+            mLoggedUserDB = UserDB.getLoggedUser();
+            if (mLoggedUserDB != null) {
+                try {
+                    mLoggedUserDB = ServerAPIController.pullUserAttributes(mLoggedUserDB);
+                } catch (ApiCallException e) {
+                    return null;
+                }
             }
             return null;
         }
@@ -773,16 +835,17 @@ public class DashboardActivity extends BaseActivity {
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-            if (loggedUser != null) {
-                if (loggedUser.getAnnouncement() != null
-                        && !loggedUser.getAnnouncement().equals("")
+            if (mLoggedUserDB != null) {
+                if (mLoggedUserDB.getAnnouncement() != null
+                        && !mLoggedUserDB.getAnnouncement().equals("")
                         && !PreferencesState.getInstance().isUserAccept()) {
                     Log.d(TAG, "show logged announcement");
                     AnnouncementMessageDialog.showAnnouncement(R.string.admin_announcement,
-                            loggedUser.getAnnouncement(),
+                            mLoggedUserDB.getAnnouncement(),
                             DashboardActivity.this);
                 } else {
-                    AnnouncementMessageDialog.checkUserClosed(loggedUser, DashboardActivity.this);
+                    AnnouncementMessageDialog.checkUserClosed(mLoggedUserDB,
+                            DashboardActivity.this);
                 }
             }
         }

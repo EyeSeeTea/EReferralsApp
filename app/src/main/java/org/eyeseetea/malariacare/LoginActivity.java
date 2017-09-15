@@ -58,6 +58,7 @@ import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.Session;
 import org.eyeseetea.malariacare.domain.boundary.IAuthenticationManager;
 import org.eyeseetea.malariacare.domain.entity.Credentials;
+import org.eyeseetea.malariacare.domain.exception.ApiCallException;
 import org.eyeseetea.malariacare.domain.usecase.ALoginUseCase;
 import org.eyeseetea.malariacare.domain.usecase.LoginUseCase;
 import org.eyeseetea.malariacare.network.ServerAPIController;
@@ -304,11 +305,13 @@ public class LoginActivity extends Activity {
         mLoginUseCase.execute(credentials, new ALoginUseCase.Callback() {
             @Override
             public void onLoginSuccess() {
+                Log.d(TAG, "onLoginSuccess");
                 mLoginActivityStrategy.onLoginSuccess(credentials);
             }
 
             @Override
             public void onServerURLNotValid() {
+                Log.d(TAG, "onServerURLNotValid");
                 onFinishLoading(null);
                 serverText.setError(getString(R.string.login_invalid_server_url));
                 showError(getString(R.string.login_invalid_server_url));
@@ -316,28 +319,39 @@ public class LoginActivity extends Activity {
 
             @Override
             public void onInvalidCredentials() {
+                Log.d(TAG, "onInvalidCredentials");
+                mLoginActivityStrategy.onBadCredentials();
+            }
+
+            @Override
+            public void onServerPinChanged() {
+                Log.d(TAG, "onServerPinChanged");
                 mLoginActivityStrategy.onBadCredentials();
             }
 
             @Override
             public void onNetworkError() {
+                Log.d(TAG, "onNetworkError");
                 mLoginActivityStrategy.onLoginNetworkError(credentials);
             }
 
             @Override
             public void onConfigJsonInvalid() {
+                Log.d(TAG, "onConfigJsonInvalid");
                 onFinishLoading(null);
                 showError(getString(R.string.login_error_json));
             }
 
             @Override
             public void onUnexpectedError() {
+                Log.d(TAG, "onUnexpectedError");
                 hideProgressBar();
                 showError(getString(R.string.login_unexpected_error));
             }
 
             @Override
             public void onMaxLoginAttemptsReachedError() {
+                Log.d(TAG, "onMaxLoginAttemptsReachedError");
                 mLoginActivityStrategy.disableLogin();
             }
         });
@@ -411,7 +425,8 @@ public class LoginActivity extends Activity {
     }
 
     public void enableLogin(boolean enable) {
-        if (loginButton != null) {
+        if (loginButton != null && !usernameEditText.getText().toString().isEmpty()
+                && !passwordEditText.getText().toString().isEmpty()) {
             loginButton.setEnabled(enable);
         }
     }
@@ -580,8 +595,14 @@ public class LoginActivity extends Activity {
         @Override
         protected Void doInBackground(LoginActivity... params) {
             loginActivity = params[0];
-            if (Session.getUser() != null) {
-                isUserClosed = ServerAPIController.isUserClosed(Session.getUser().getUid());
+            if(Session.getUserDB()==null){
+                isUserClosed = null;
+                return null;
+            }
+            try {
+                isUserClosed = ServerAPIController.isUserClosed(Session.getUserDB().getUid());
+            }catch (ApiCallException e){
+                isUserClosed = null;
             }
             return null;
         }

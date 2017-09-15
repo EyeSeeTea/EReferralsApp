@@ -32,19 +32,21 @@ import com.squareup.okhttp.RequestBody;
 import com.squareup.okhttp.Response;
 
 import org.eyeseetea.malariacare.R;
-import org.eyeseetea.malariacare.data.database.model.CompositeScore;
-import org.eyeseetea.malariacare.data.database.model.Survey;
-import org.eyeseetea.malariacare.data.database.model.Value;
+import org.eyeseetea.malariacare.data.database.model.CompositeScoreDB;
+import org.eyeseetea.malariacare.data.database.model.SurveyDB;
+import org.eyeseetea.malariacare.data.database.model.ValueDB;
 import org.eyeseetea.malariacare.data.database.utils.LocationMemory;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.Session;
 import org.eyeseetea.malariacare.data.sync.importer.models.EventExtended;
+import org.eyeseetea.malariacare.domain.exception.ApiCallException;
+import org.eyeseetea.malariacare.domain.exception.EmptyLocationException;
 import org.eyeseetea.malariacare.layout.score.ScoreRegister;
-import org.eyeseetea.malariacare.phonemetadata.PhoneMetaData;
 import org.eyeseetea.malariacare.services.SurveyService;
 import org.eyeseetea.malariacare.utils.Constants;
 import org.eyeseetea.malariacare.utils.Utils;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -82,7 +84,7 @@ public class PushClient {
      * Current server url
      */
     private static String DHIS_SERVER = "https://www.psi-mis.org";
-    Survey survey;
+    SurveyDB mSurveyDB;
     Activity activity;
     Context applicationContext;
 
@@ -97,13 +99,13 @@ public class PushClient {
         this.activity = activity;
     }
 
-    public PushClient(Survey survey, Activity activity) {
+    public PushClient(SurveyDB surveyDB, Activity activity) {
         this((Activity) activity);
-        this.survey = survey;
+        this.mSurveyDB = surveyDB;
     }
 
-    public void setSurvey(Survey survey) {
-        this.survey = survey;
+    public void setSurveyDB(SurveyDB surveyDB) {
+        this.mSurveyDB = surveyDB;
     }
 
     /**
@@ -126,7 +128,13 @@ public class PushClient {
                 updateSurveyState();
             }
             return result;
-        } catch (Exception ex) {
+        } catch (EmptyLocationException ex) {
+            new ApiCallException(ex);
+            return new PushResult(ex);
+        } catch (JSONException ex) {
+            new ApiCallException(ex);
+            return new PushResult(ex);
+        } catch (ApiCallException ex){
             return new PushResult(ex);
         }
     }
@@ -138,8 +146,8 @@ public class PushClient {
             PushResult result = new PushResult(pushData(data));
             if (result.isSuccessful()) {
                 //Survey -> Sent
-                this.survey.setStatus(Constants.SURVEY_SENT);
-                this.survey.save();
+                this.mSurveyDB.setStatus(Constants.SURVEY_SENT);
+                this.mSurveyDB.save();
 
                 //check if the user was sent more than the limit
                 //ServerAPIController.banOrgUnitIfRequired();
@@ -154,7 +162,7 @@ public class PushClient {
     /**
      * Pushes data to DHIS Server
      */
-    private JSONObject pushData(JSONObject data) throws Exception {
+    private JSONObject pushData(JSONObject data) throws ApiCallException {
         Response response = null;
 
         final String DHIS_URL = getDhisURL();
@@ -176,13 +184,12 @@ public class PushClient {
                 .url(DHIS_URL)
                 .post(body)
                 .build();
-
-        response = client.newCall(request).execute();
-        if (!response.isSuccessful()) {
-            Log.e(TAG, "pushData (" + response.code() + "): " + response.body().string());
-            throw new IOException(response.message());
+        try {
+            response = client.newCall(request).execute();
+        } catch (IOException e) {
+            throw new ApiCallException(e);
         }
-        return parseResponse(response.body().string());
+        return ServerApiUtils.getApiResponseAsJSONObject(response);
     }
 
     public void updateSurveyState() {
@@ -198,22 +205,24 @@ public class PushClient {
      *
      * @return JSONObject with progra, orgunit, eventdate and so on...
      */
-    private JSONObject prepareMetadata() throws Exception {
-        Log.d(TAG, "prepareMetadata for survey: " + survey.getId_survey());
+    private JSONObject prepareMetadata()
+            throws EmptyLocationException, JSONException, ApiCallException {
+        Log.d(TAG, "prepareMetadata for survey: " + mSurveyDB.getId_survey());
 
         JSONObject object = new JSONObject();
-        object.put(TAG_PROGRAM, survey.getProgram().getUid());
+        object.put(TAG_PROGRAM, mSurveyDB.getProgramDB().getUid());
         object.put(TAG_ORG_UNIT, ServerAPIController.getOrgUnitUID());
         object.put(TAG_EVENTDATE,
-                android.text.format.DateFormat.format("yyyy-MM-dd", survey.getCompletionDate()));
+                android.text.format.DateFormat.format("yyyy-MM-dd",
+                        mSurveyDB.getCompletionDate()));
         object.put(TAG_STATUS, COMPLETED);
-        object.put(TAG_STOREDBY, survey.getUser().getName());
+        object.put(TAG_STOREDBY, mSurveyDB.getUserDB().getName());
         //TODO: put it in the object.
 
-        Location lastLocation = LocationMemory.get(survey.getId_survey());
+        Location lastLocation = LocationMemory.get(mSurveyDB.getId_survey());
         //If there is no location (location is required) -> exception
         if (lastLocation == null) {
-            throw new Exception(activity.getString(R.string.dialog_error_push_no_location));
+            throw new EmptyLocationException(activity.getString(R.string.dialog_error_push_no_location));
         }
         object.put(TAG_COORDINATE, prepareCoordinates(lastLocation));
 
@@ -221,7 +230,7 @@ public class PushClient {
         return object;
     }
 
-    private JSONObject prepareCoordinates(Location location) throws Exception {
+    private JSONObject prepareCoordinates(Location location) throws JSONException {
         JSONObject coordinate = new JSONObject();
 
         if (location == null) {
@@ -240,8 +249,8 @@ public class PushClient {
      *
      * @param data JSON object to update
      */
-    private JSONObject prepareDataElements(JSONObject data) throws Exception {
-        Log.d(TAG, "prepareDataElements for survey: " + survey.getId_survey());
+    private JSONObject prepareDataElements(JSONObject data) throws JSONException {
+        Log.d(TAG, "prepareDataElements for survey: " + mSurveyDB.getId_survey());
 
         //Add dataElement per values
         JSONArray values = prepareValues(new JSONArray());
@@ -257,31 +266,30 @@ public class PushClient {
     /**
      * Add a dataElement per value (answer)
      */
-    private JSONArray prepareValues(JSONArray values) throws Exception {
-        for (Value value : survey.getValuesFromDB()) {
-            values.put(prepareValue(value));
+    private JSONArray prepareValues(JSONArray values) throws JSONException {
+        for (ValueDB valueDB : mSurveyDB.getValuesFromDB()) {
+            values.put(prepareValue(valueDB));
         }
         return values;
     }
 
-    private JSONArray prepareCompositeScores(JSONArray values) throws Exception {
+    private JSONArray prepareCompositeScores(JSONArray values) throws JSONException {
 
         //Cleans score
         ScoreRegister.clear();
 
         //Prepare scores info
-        List<CompositeScore> compositeScoreList = ScoreRegister.loadCompositeScores(survey);
+        List<CompositeScoreDB> compositeScoreDBList = ScoreRegister.loadCompositeScores(mSurveyDB);
 
-        //1 CompositeScore -> 1 dataValue
-        for (CompositeScore compositeScore : compositeScoreList) {
-            values.put(prepareValue(compositeScore));
+        //1 CompositeScoreDB -> 1 dataValue
+        for (CompositeScoreDB compositeScoreDB : compositeScoreDBList) {
+            values.put(prepareValue(compositeScoreDB));
         }
 
-        PhoneMetaData phoneMetaData = Session.getPhoneMetaData();
-        values.put(prepareDataElementValue((PreferencesState.getInstance().getContext().getString(R.string.control_data_element_phone_metadata)), phoneMetaData.getPhone_metaData()));
+        values.put(prepareDataElementValue((PreferencesState.getInstance().getContext().getString(R.string.control_data_element_phone_metadata)), Session.getPhoneMetaDataValue()));
         if (PreferencesState.getInstance().getContext().getString(R.string.control_data_element_datetime_capture) != null && !PreferencesState.getInstance().getContext().getString(R.string.control_data_element_datetime_capture).equals("")) {
             values.put(prepareDataElementValue(PreferencesState.getInstance().getContext().getString(R.string.control_data_element_datetime_capture),
-                    EventExtended.format(survey.getCompletionDate(),
+                    EventExtended.format(mSurveyDB.getCompletionDate(),
                             EventExtended.AMERICAN_DATE_FORMAT)));
         }
         if (PreferencesState.getInstance().getContext().getString(R.string.control_data_element_datetime_sent) != null && !PreferencesState.getInstance().getContext().getString(R.string.control_data_element_datetime_sent).equals("")) {
@@ -295,10 +303,10 @@ public class PushClient {
      * Adds a pair dataElement|value according to the passed value.
      * Format: {dataValues: [{dataElement:'234567',value:'34'}, ...]}
      */
-    private JSONObject prepareValue(Value value) throws Exception {
+    private JSONObject prepareValue(ValueDB valueDB) throws JSONException {
         JSONObject elementObject = new JSONObject();
-        elementObject.put(TAG_DATAELEMENT, value.getQuestion().getUid());
-        elementObject.put(TAG_VALUE, value.getValue());
+        elementObject.put(TAG_DATAELEMENT, valueDB.getQuestionDB().getUid());
+        elementObject.put(TAG_VALUE, valueDB.getValue());
         return elementObject;
     }
 
@@ -306,7 +314,7 @@ public class PushClient {
      * Adds a pair dataElement|value according to the passed value.
      * Format: {dataValues: [{dataElement:'234567',value:'34'}, ...]}
      */
-    private JSONObject prepareDataElementValue(String uid, String value) throws Exception {
+    private JSONObject prepareDataElementValue(String uid, String value) throws JSONException {
         JSONObject elementObject = new JSONObject();
         elementObject.put(TAG_DATAELEMENT, uid);
         elementObject.put(TAG_VALUE, value);
@@ -314,13 +322,13 @@ public class PushClient {
     }
 
     /**
-     * Adds a pair dataElement|value according to the 'compositeScore' of the value.
+     * Adds a pair dataElement|value according to the 'compositeScoreDB' of the value.
      * Format: {dataValues: [{dataElement:'234567',value:'34'}, ...]}
      */
-    private JSONObject prepareValue(CompositeScore compositeScore) throws Exception {
+    private JSONObject prepareValue(CompositeScoreDB compositeScoreDB) throws JSONException {
         JSONObject elementObject = new JSONObject();
-        elementObject.put(TAG_DATAELEMENT, compositeScore.getUid());
-        elementObject.put(TAG_VALUE, Utils.round(ScoreRegister.getCompositeScore(compositeScore)));
+        elementObject.put(TAG_DATAELEMENT, compositeScoreDB.getUid());
+        elementObject.put(TAG_VALUE, Utils.round(ScoreRegister.getCompositeScore(compositeScoreDB)));
         return elementObject;
     }
 
@@ -329,17 +337,7 @@ public class PushClient {
      */
     private String getDhisURL() {
         String url = DHIS_SERVER + DHIS_PUSH_API;
-        return ServerAPIController.encodeBlanks(url);
-    }
-
-    private JSONObject parseResponse(String responseData) throws Exception {
-        try {
-            JSONObject jsonResponse = new JSONObject(responseData);
-            Log.i(TAG, "parseResponse: " + jsonResponse);
-            return jsonResponse;
-        } catch (Exception ex) {
-            throw new Exception(activity.getString(R.string.dialog_info_push_bad_credentials));
-        }
+        return ServerApiUtils.encodeBlanks(url);
     }
 
 }

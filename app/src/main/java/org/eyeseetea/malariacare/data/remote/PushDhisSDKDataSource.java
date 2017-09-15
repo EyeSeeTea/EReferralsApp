@@ -25,12 +25,12 @@ import android.util.Log;
 import com.raizlabs.android.dbflow.sql.language.Delete;
 
 import org.eyeseetea.malariacare.data.IDataSourceCallback;
-import org.eyeseetea.malariacare.data.database.model.Survey;
+import org.eyeseetea.malariacare.data.database.model.SurveyDB;
 import org.eyeseetea.malariacare.data.sync.mappers.PushReportMapper;
 import org.eyeseetea.malariacare.domain.entity.pushsummary.PushReport;
-import org.eyeseetea.malariacare.domain.exception.SurveysToPushNotFoundException;
 import org.eyeseetea.malariacare.domain.exception.push.PushDhisException;
 import org.eyeseetea.malariacare.domain.exception.push.PushReportException;
+import org.eyeseetea.malariacare.domain.exception.ConvertedEventsToPushNotFoundException;
 import org.hisp.dhis.client.sdk.android.api.D2;
 import org.hisp.dhis.client.sdk.android.api.persistence.flow.EventFlow;
 import org.hisp.dhis.client.sdk.android.api.persistence.flow.StateFlow;
@@ -58,7 +58,7 @@ public class PushDhisSDKDataSource {
         final Set<String> eventUids = getEventUidToBePushed();
 
         if (eventUids.isEmpty() || eventUids.size() == 0) {
-            callback.onError(new SurveysToPushNotFoundException("Null events"));
+            callback.onError(new ConvertedEventsToPushNotFoundException());
             return;
         }
         Observable<Map<String, ImportSummary>> eventObserver =
@@ -98,9 +98,9 @@ public class PushDhisSDKDataSource {
     private Set<String> getEventUidToBePushed() {
         final Set<String> eventUids = new HashSet<>();
         final Set<String> sendingEventUids = new HashSet<>();
-        List<Survey> surveys = Survey.getAllSendingSurveys();
-        for (Survey survey : surveys) {
-            sendingEventUids.add(survey.getEventUid());
+        List<SurveyDB> surveyDBs = SurveyDB.getAllSendingSurveys();
+        for (SurveyDB surveyDB : surveyDBs) {
+            sendingEventUids.add(surveyDB.getEventUid());
         }
         List<EventFlow> eventsFlows = SdkQueries.getEvents();
         Log.d(TAG, "Size of events " + eventsFlows.size() + "size of surveys"

@@ -26,11 +26,15 @@ public class PushUseCase implements UseCase {
 
         void onInformativeError(String message);
 
+        void onInformativeMessage(String message);
+
         void onClosedUser();
 
         void onBannedOrgUnit();
 
         void onReOpenOrgUnit();
+
+        void onApiCallError();
 
         void onApiCallError(ApiCallException e);
     }

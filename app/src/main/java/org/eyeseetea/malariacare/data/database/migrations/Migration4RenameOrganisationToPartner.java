@@ -9,6 +9,8 @@ import com.raizlabs.android.dbflow.structure.database.DatabaseWrapper;
 import org.eyeseetea.malariacare.data.database.AppDatabase;
 import org.eyeseetea.malariacare.data.database.utils.populatedb.FileCsvs;
 import org.eyeseetea.malariacare.data.database.utils.populatedb.PopulateDB;
+import org.eyeseetea.malariacare.domain.exception.MigrateMigrationException;
+import org.eyeseetea.malariacare.domain.exception.PostMigrationException;
 
 import java.io.IOException;
 
@@ -26,7 +28,7 @@ public class Migration4RenameOrganisationToPartner extends BaseMigration {
     @Override
     public void migrate(DatabaseWrapper database) {
 
-        String sqlCopy = "INSERT INTO Partner (id_partner, uid_partner, name)"
+        String sqlCopy = "INSERT INTO PartnerDB (id_partner, uid_partner, name)"
                 + " SELECT id_organisation, uid_organisation, name"
                 + " FROM Organisation;";
         database.execSQL(sqlCopy);
@@ -40,11 +42,11 @@ public class Migration4RenameOrganisationToPartner extends BaseMigration {
         String sqlCopyUser =
                 "INSERT INTO UserTemp (id_user, uid_user, name, partner_fk, supervisor_fk)"
                         + " SELECT id_user, uid_user, name ,organisation_fk ,supervisor_fk"
-                        + " FROM User;";
+                        + " FROM UserDB;";
         database.execSQL(sqlCopyUser);
-        String sqlDeleteUser = "DROP TABLE IF EXISTS User;";
+        String sqlDeleteUser = "DROP TABLE IF EXISTS UserDB;";
         database.execSQL(sqlDeleteUser);
-        String renameUser = "ALTER TABLE UserTemp RENAME TO User";
+        String renameUser = "ALTER TABLE UserTemp RENAME TO UserDB";
         database.execSQL(renameUser);
 
         String sqlTreatmentTemp =
@@ -66,16 +68,7 @@ public class Migration4RenameOrganisationToPartner extends BaseMigration {
         try {
             fileCsvs.copyCsvFile("Organisations.csv", PopulateDB.PARTNER_CSV);
         } catch (IOException e) {
-            Log.e(TAG, "Error copying csv\n" + e.getMessage());
-            e.printStackTrace();
+           new MigrateMigrationException(e);
         }
-
-//        TreatmentTable treatmentTable=new TreatmentTable();
-//        try {
-//            treatmentTable.generateTreatmentMatrix();
-//        } catch (IOException e) {
-//            Log.e(TAG, "Error getting treatment\n" + e.getMessage());
-//            e.printStackTrace();
-//        }
     }
 }
