@@ -126,7 +126,7 @@ android {
             buildConfigField "String", "defaultLocale", "\"en\""
         }
         ereferrals {
-            applicationId 'org.eyeseetea.surveillance_ref_bb'
+            applicationId 'org.eyeseetea.surveillance_ref'
             versionName "1.0.6"
             buildConfigField "boolean", "reviewScreen", "true"
             buildConfigField "boolean", "activeSwipeNavigator", "false"
