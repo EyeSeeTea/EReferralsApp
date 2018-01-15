@@ -1,9 +1,8 @@
 package org.eyeseetea.malariacare.views.question.multiquestion;
 
 import android.content.Context;
-import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ImageView;
 import android.widget.Spinner;
@@ -91,12 +90,16 @@ public class DropdownMultiQuestionView extends AOptionQuestionView implements IQ
     }
 
     @Override
+    public void requestAnswerFocus() {
+        spinnerOptions.requestFocusFromTouch();
+    }
+
+    @Override
     public boolean hasError() {
         return false;
     }
 
     private void init(final Context context) {
-        setFocusableInTouchMode(true);
         inflate(context, R.layout.multi_question_tab_dropdown_row, this);
 
         header = (CustomTextView) findViewById(R.id.row_header_text);
@@ -104,14 +107,13 @@ public class DropdownMultiQuestionView extends AOptionQuestionView implements IQ
         imageView = ((ImageView) findViewById(R.id.question_image_row));
         optionSetFromSavedValue = true;
 
+        spinnerOptions.setFocusable(true);
         spinnerOptions.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
                 OptionDB optionDB = (OptionDB) parent.getItemAtPosition(position);
                 if (!optionSetFromSavedValue) {
                     notifyAnswerChanged(optionDB);
-                    requestFocus();
-                    hideKeyboard();
                 } else {
                     optionSetFromSavedValue = false;
                 }
@@ -122,12 +124,18 @@ public class DropdownMultiQuestionView extends AOptionQuestionView implements IQ
 
             }
         });
+        spinnerOptions.setOnTouchListener(new OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_UP) {
+                    hideKeyboard(v);
+                }
+                return false;
+            }
+        });
     }
 
-    private void hideKeyboard() {
-        Log.d(DropdownMultiQuestionView.class.getName(), "KEYBOARD HIDE ");
-        InputMethodManager keyboard = (InputMethodManager) getContext().getSystemService(
-                Context.INPUT_METHOD_SERVICE);
-        keyboard.hideSoftInputFromWindow(getWindowToken(), 0);
+    public Spinner getSpinnerOptions() {
+        return spinnerOptions;
     }
 }

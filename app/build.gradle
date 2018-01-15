@@ -44,14 +44,24 @@ android {
         signingConfig signingConfigs.config
     }
     buildTypes {
+
+        testBuildType "staging"
+
         release {
+            buildConfigField "boolean", "databaseInMemory", "false"
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
         debug {
+            buildConfigField "boolean", "databaseInMemory", "false"
             debuggable true
         }
+        staging {
+            initWith(buildTypes.debug)
+            buildConfigField "boolean", "databaseInMemory", "true"
+        }
     }
+
     //TODO This config is related to a known issue: http://stackoverflow.com/questions/20827885/android-studio-0-4-duplicate-files-copied-in-apk-meta-inf-license-txt
     packagingOptions {
         exclude 'LICENSE.txt'
@@ -86,6 +96,9 @@ android {
             buildConfigField "int", "LimitSurveysTimeHours", "0"
             buildConfigField "boolean", "customfont", "true"
             buildConfigField "String", "defaultLocale", "\"en\""
+            buildConfigField "int", "maxDaysForDeletingSentSurveys", "14"
+            buildConfigField "boolean", "performMaintenanceTasks", "false"
+            buildConfigField "boolean", "exitFromSurveyToImproveTab", "true"
         }
         laos {
             applicationId 'org.eyeseetea.surveillance_la_bb'
@@ -105,6 +118,9 @@ android {
             buildConfigField "int", "LimitSurveysTimeHours", "1"
             buildConfigField "boolean", "customfont", "true"
             buildConfigField "String", "defaultLocale", "\"en\""
+            buildConfigField "int", "maxDaysForDeletingSentSurveys", "14"
+            buildConfigField "boolean", "performMaintenanceTasks", "false"
+            buildConfigField "boolean", "exitFromSurveyToImproveTab", "true"
         }
         myanmar {
             applicationId 'org.eyeseetea.surveillance_mm_bb'
@@ -124,11 +140,13 @@ android {
             buildConfigField "int", "LimitSurveysTimeHours", "0"
             buildConfigField "boolean", "customfont", "true"
             buildConfigField "String", "defaultLocale", "\"en\""
-            resValue "string", "authority", applicationId + versionName + "_EREFERRALS_DHIS2_DEFAULT_AUTHORITY"
+            buildConfigField "int", "maxDaysForDeletingSentSurveys", "14"
+            buildConfigField "boolean", "performMaintenanceTasks", "false"
+            buildConfigField "boolean", "exitFromSurveyToImproveTab", "true"
         }
         ereferrals {
             applicationId 'org.eyeseetea.surveillance_ref_bb'
-            versionName "1.0.12"
+            versionName "1.0.13"
             buildConfigField "boolean", "reviewScreen", "true"
             buildConfigField "boolean", "activeSwipeNavigator", "false"
             buildConfigField "boolean", "activeButtonNavigator", "true"
@@ -139,11 +157,15 @@ android {
             buildConfigField "boolean", "activeStockFragment", "true"
             buildConfigField "boolean", "patientTestedByDefault", "true"
             buildConfigField "boolean", "activeAVFragment", "true"
-            buildConfigField "String", "AuthoritiesProvider", "\"org.eyeseetea.malariacare.data.database.utils.REFDBProvider\""
+            buildConfigField "String", "AuthoritiesProvider", "\"" + applicationId + ".data.database.utils.REFDBProvider\""
             buildConfigField "int", "LimitSurveysCount", "0"
             buildConfigField "int", "LimitSurveysTimeHours", "0"
             buildConfigField "boolean", "customfont", "false"
             buildConfigField "String", "defaultLocale", "\"en\""
+            resValue "string", "authority", applicationId + versionName + "_EREFERRALS_DHIS2_DEFAULT_AUTHORITY"
+            buildConfigField "int", "maxDaysForDeletingSentSurveys", "14"
+            buildConfigField "boolean", "performMaintenanceTasks", "true"
+            buildConfigField "boolean", "exitFromSurveyToImproveTab", "false"
         }
         cnm {
             applicationId 'org.eyeseetea.surveillance_cnm_bb'
@@ -162,6 +184,9 @@ android {
             buildConfigField "int", "LimitSurveysCount", "0"
             buildConfigField "int", "LimitSurveysTimeHours", "0"
             buildConfigField "boolean", "customfont", "true"
+            buildConfigField "int", "maxDaysForDeletingSentSurveys", "14"
+            buildConfigField "boolean", "performMaintenanceTasks", "false"
+            buildConfigField "boolean", "exitFromSurveyToImproveTab", "true"
         }
 
     }
