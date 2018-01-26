@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 <!-- Fuzzy -->
-<string name="login_userName">"User Name"</string>
+<string name="login_userName">"User Code"</string>
 
 <!-- Fuzzy -->
-<string name="login_password">"Password"</string>
+<string name="login_password">"PIN"</string>
 
 <!-- Open Referrals -->
 <!-- Fuzzy -->
@@ -393,6 +393,8 @@
 <!-- Login -->
 <!-- Fuzzy -->
 <string name="login_btn_login">"Login"</string>
+<string name="advanced_options">"Advanced Options"</string>
+<string name="simple_options">"Simple Options"</string>
 
     <!-- Voucher event create responseCode not 200, but -->
 <!-- Fuzzy -->
@@ -897,7 +899,7 @@
 <string name="error_exporting_data">"Error metadata could not be exported."</string>
 <string name="google_play_required">"This app requires Google Play Services. Please install Google Play Services on your device and relaunch this app."</string>
 <string name="voucher">"Voucher"</string>
-<string name="forgot_password">"I forgot my password"</string>
+<string name="forgot_password">"I forgot my PIN"</string>
 <string name="forgot_password_sms_sent">"SMS sent to stored phone for the given username"</string>
 <string name="forgot_password_wrong_username">"Username do not match any register in the server"</string>
 <string name="ws_unknown_exception">"Unknown exception."</string>
@@ -1098,4 +1100,6 @@
 <string name="dynamic_error_invalid_positive_number">"Invalid positive number"</string>
 <string name="error_files_download_no_files">"No media for this country"</string>
 <string name="error_files_download_no_wifi">"Please connect to a WiFi network to download the media for this country"</string>
+<string name="error_android_version_not_supported">"Apologizes but Connect is not compatible with your device Android version. You must have Android 5.0+ to get Connect working."</string>
+<string name="error_downloading_languages">"Error during languages download: "</string>
 </resources>

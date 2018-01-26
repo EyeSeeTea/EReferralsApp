@@ -54,7 +54,7 @@ public abstract class APushServiceStrategy {
 
         pushUseCase.execute(new PushUseCase.Callback() {
             @Override
-            public void onStartPushing() {
+            public void onPushStart() {
                 Log.d(TAG, "On push start");
             }
 

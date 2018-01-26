@@ -52,6 +52,7 @@ import org.eyeseetea.malariacare.phonemetadata.PhoneMetaData;
 import org.eyeseetea.malariacare.receivers.AlarmPushReceiver;
 import org.eyeseetea.malariacare.strategies.BaseActivityStrategy;
 import org.eyeseetea.malariacare.utils.Constants;
+import org.eyeseetea.malariacare.utils.LanguageContextWrapper;
 import org.eyeseetea.malariacare.utils.Permissions;
 import org.eyeseetea.malariacare.utils.Utils;
 
@@ -84,7 +85,12 @@ public abstract class BaseActivity extends ActionBarActivity {
         }
 
         if (!EyeSeeTeaApplication.permissions.areAllPermissionsGranted()) {
-            EyeSeeTeaApplication.permissions.requestNextPermission();
+            EyeSeeTeaApplication.permissions.requestNextPermission(this);
+        }else{
+            if(Session.getPhoneMetaDataValue().equals("")) {
+                PhoneMetaData phoneMetaData = getPhoneMetadata();
+                Session.setPhoneMetaData(phoneMetaData);
+            }
         }
 
         initView(savedInstanceState);
@@ -108,13 +114,16 @@ public abstract class BaseActivity extends ActionBarActivity {
     public void onRequestPermissionsResult(int requestCode,
             String permissions[], int[] grantResults) {
         if (Permissions.processAnswer(requestCode, permissions, grantResults)) {
-            EyeSeeTeaApplication.permissions.requestNextPermission();
+            EyeSeeTeaApplication.permissions.requestNextPermission(this);
             if (EyeSeeTeaApplication.permissions.areAllPermissionsGranted()) {
                 PhoneMetaData phoneMetaData = getPhoneMetadata();
                 Session.setPhoneMetaData(phoneMetaData);
             }
         } else {
-            onDestroy();
+            Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+            homeIntent.addCategory( Intent.CATEGORY_HOME );
+            homeIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(homeIntent);
         }
     }
 
@@ -447,4 +456,11 @@ public abstract class BaseActivity extends ActionBarActivity {
         return mBaseActivityStrategy;
     }
 
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        String currentLanguage = PreferencesState.getInstance().getCurrentLocale();
+        Context context = LanguageContextWrapper.wrap(newBase, currentLanguage);
+        super.attachBaseContext(context);
+    }
 }

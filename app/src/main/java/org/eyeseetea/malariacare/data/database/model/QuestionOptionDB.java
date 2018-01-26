@@ -19,11 +19,15 @@
 
 package org.eyeseetea.malariacare.data.database.model;
 
+import static org.eyeseetea.malariacare.data.database.AppDatabase.matchAlias;
 import static org.eyeseetea.malariacare.data.database.AppDatabase.matchName;
+import static org.eyeseetea.malariacare.data.database.AppDatabase.questionRelationAlias;
+import static org.eyeseetea.malariacare.data.database.AppDatabase.questionRelationName;
 
 import com.raizlabs.android.dbflow.annotation.Column;
 import com.raizlabs.android.dbflow.annotation.PrimaryKey;
 import com.raizlabs.android.dbflow.annotation.Table;
+import com.raizlabs.android.dbflow.sql.language.Delete;
 import com.raizlabs.android.dbflow.sql.language.Join;
 import com.raizlabs.android.dbflow.sql.language.Select;
 import com.raizlabs.android.dbflow.structure.BaseModel;
@@ -59,6 +63,7 @@ public class QuestionOptionDB extends BaseModel {
      * Reference to its mMatchDB (lazy)
      */
     MatchDB mMatchDB;
+
 
     public QuestionOptionDB() {
     }
@@ -98,6 +103,12 @@ public class QuestionOptionDB extends BaseModel {
                         questionRelationDB.getId_question_relation())).queryList();
     }
 
+    public static void deleteQuestionOptionsById(long question_id) {
+         new Delete()
+                .from(QuestionOptionDB.class)
+                .where(QuestionOptionDB_Table.id_question_fk.eq(question_id));
+    }
+
     /**
      * Method to get the mMatchDBs in questionOption with a mQuestionDB id and a a mOptionDB
      *
@@ -122,6 +133,8 @@ public class QuestionOptionDB extends BaseModel {
 //FIXME doing in two query because there is a bug in DBFlow
     }
 
+
+
     /**
      * Method to delete in cascade the mQuestionOptionDBs passed.
      *
@@ -135,6 +148,10 @@ public class QuestionOptionDB extends BaseModel {
 
     public static List<QuestionOptionDB> listAll() {
         return new Select().from(QuestionOptionDB.class).queryList();
+    }
+
+    public static int getQuestionOptionDBCount() {
+        return listAll().size();
     }
 
     public static void deleteAll() {
@@ -224,6 +241,15 @@ public class QuestionOptionDB extends BaseModel {
         }
 
         return matchDB.getQuestionThreshold();
+    }
+
+    public QuestionRelationDB getQuestionRelation() {
+        return new Select().from(QuestionRelationDB.class).as(questionRelationName).join(
+                MatchDB.class, Join.JoinType.LEFT_OUTER).as(matchName).on(
+                QuestionRelationDB_Table.id_question_relation.withTable(questionRelationAlias).eq(
+                        MatchDB_Table.id_question_relation_fk.withTable(matchAlias)))
+                .where(MatchDB_Table.id_match.withTable(matchAlias).eq(id_match_fk))
+                .querySingle();
     }
 
     public static List<QuestionOptionDB> getQuestionOptionsWithMatchId(Long id_match) {

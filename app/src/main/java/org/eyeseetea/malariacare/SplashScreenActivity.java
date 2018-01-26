@@ -1,23 +1,32 @@
 package org.eyeseetea.malariacare;
 
 import static org.eyeseetea.malariacare.BuildConfig.maxDaysForDeletingSentSurveys;
+
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.util.Log;
+import android.widget.Toast;
 
+import org.eyeseetea.malariacare.data.authentication.CredentialsReader;
 import org.eyeseetea.malariacare.data.database.PostMigration;
 import org.eyeseetea.malariacare.data.database.model.SurveyDB;
 import org.eyeseetea.malariacare.data.database.utils.populatedb.PopulateDB;
 import org.eyeseetea.malariacare.data.remote.SdkQueries;
 import org.eyeseetea.malariacare.data.sync.importer.PullController;
+import org.eyeseetea.malariacare.data.sync.importer.strategies.ILanguagesClient;
+import org.eyeseetea.malariacare.data.sync.importer.strategies.LanguageDownloader;
+import org.eyeseetea.malariacare.domain.boundary.IConnectivityManager;
 import org.eyeseetea.malariacare.domain.boundary.executors.IAsyncExecutor;
 import org.eyeseetea.malariacare.domain.boundary.executors.IMainExecutor;
+import org.eyeseetea.malariacare.domain.exception.LanguagesDownloadException;
 import org.eyeseetea.malariacare.domain.exception.PostMigrationException;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullFilters;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullUseCase;
+import org.eyeseetea.malariacare.locale.factory.LanguageFactory;
+import org.eyeseetea.malariacare.network.factory.NetworkManagerFactory;
 import org.eyeseetea.malariacare.presentation.executors.AsyncExecutor;
 import org.eyeseetea.malariacare.presentation.executors.UIThreadExecutor;
 import org.eyeseetea.malariacare.strategies.SplashActivityStrategy;
@@ -34,12 +43,14 @@ public class SplashScreenActivity extends Activity {
         Log.d(TAG, "onCreate");
         super.onCreate(savedInstanceState);
         splashActivityStrategy = new SplashActivityStrategy(this);
-        setContentView(R.layout.activity_splash);
-        AsyncInitApplication asyncInitApplication = new AsyncInitApplication(this);
-        asyncInitApplication.execute((Void) null);
+        if (splashActivityStrategy.canEnterApp()) {
+            setContentView(R.layout.activity_splash);
+            AsyncInitApplication asyncInitApplication = new AsyncInitApplication(this);
+            asyncInitApplication.execute((Void) null);
+        }
     }
 
-    private void init() {
+    private void init() throws Exception {
         D2.init(this);
         SdkQueries.createDBIndexes();
         //Added to execute a query in DB, because DBFLow doesn't do any migration until a query
@@ -47,7 +58,7 @@ public class SplashScreenActivity extends Activity {
         PopulateDB.initDBQuery();
         try {
             PostMigration.launchPostMigration();
-        }catch (PostMigrationException e){
+        } catch (PostMigrationException e) {
             new AlertDialog.Builder(this)
                     .setTitle(getApplicationContext().getString(R.string.error_message))
                     .setCancelable(false)
@@ -70,12 +81,20 @@ public class SplashScreenActivity extends Activity {
             splashActivityStrategy.executePull(pullUseCase, pullFilters);
         }
 
+        try {
+            splashActivityStrategy.downloadLanguagesFromServer();
+        } catch (Exception e) {
+            Log.e(TAG, "Unable to download Languages From Server" + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
+
+
         if(BuildConfig.performMaintenanceTasks) {
             performMaintenanceTasks();
         }
 
     }
-
     public class AsyncInitApplication extends AsyncTask<Void, Void, Void> {
         Activity activity;
 
@@ -90,7 +109,13 @@ public class SplashScreenActivity extends Activity {
 
         @Override
         protected Void doInBackground(Void... params) {
-            init();
+            try {
+                init();
+            } catch (Exception e) {
+                if (e instanceof LanguagesDownloadException) {
+                    showToast(R.string.error_downloading_languages, e);
+                }
+            }
             return null;
         }
 
@@ -98,6 +123,16 @@ public class SplashScreenActivity extends Activity {
         protected void onPostExecute(Void aVoid) {
             splashActivityStrategy.finishAndGo();
         }
+    }
+
+    private void showToast(int titleResource, final Exception e) {
+        final String title = getResources().getString(titleResource);
+        runOnUiThread(new Runnable() {
+            public void run() {
+                Toast.makeText(getApplicationContext(), title + e.getMessage(),
+                        Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     @Override

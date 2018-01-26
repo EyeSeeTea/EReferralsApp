@@ -27,6 +27,16 @@ android {
         config {}
     }
 
+    sourceSets {
+        String sharedTestDir = 'src/sharedTest/java'
+        test {
+            java.srcDir sharedTestDir
+        }
+        androidTest {
+            java.srcDirs sharedTestDir
+        }
+    }
+
     compileSdkVersion cfg.compileSdkVersion
     buildToolsVersion cfg.buildToolsVersion
 
@@ -42,6 +52,9 @@ android {
         }
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         signingConfig signingConfigs.config
+        buildConfigField "String", "poEditorApiUrl", "\"https://api.poeditor.com/\""
+        buildConfigField "boolean", "downloadLanguagesFromServer", "false"
+
     }
     buildTypes {
 
@@ -81,6 +94,7 @@ android {
         cambodia {
             applicationId 'org.eyeseetea.surveillance_kh_bb'
             versionName "1.3.3"
+            buildConfigField "boolean", "activeMonitoringFragment", "true"
             buildConfigField "boolean", "reviewScreen", "true"
             buildConfigField "boolean", "activeSwipeNavigator", "true"
             buildConfigField "boolean", "activeButtonNavigator", "false"
@@ -103,6 +117,7 @@ android {
         laos {
             applicationId 'org.eyeseetea.surveillance_la_bb'
             versionName "1.2.3"
+            buildConfigField "boolean", "activeMonitoringFragment", "true"
             buildConfigField "boolean", "reviewScreen", "true"
             buildConfigField "boolean", "activeSwipeNavigator", "true"
             buildConfigField "boolean", "activeButtonNavigator", "false"
@@ -125,6 +140,7 @@ android {
         myanmar {
             applicationId 'org.eyeseetea.surveillance_mm_bb'
             versionName "1.0.3"
+            buildConfigField "boolean", "activeMonitoringFragment", "true"
             buildConfigField "boolean", "reviewScreen", "true"
             buildConfigField "boolean", "activeSwipeNavigator", "false"
             buildConfigField "boolean", "activeButtonNavigator", "true"
@@ -146,7 +162,9 @@ android {
         }
         ereferrals {
             applicationId 'org.eyeseetea.surveillance_ref_bb'
-            versionName "1.0.13"
+            versionName "1.1.0"
+            buildConfigField "boolean", "downloadLanguagesFromServer", "true"
+            buildConfigField "boolean", "activeMonitoringFragment", "true"
             buildConfigField "boolean", "reviewScreen", "true"
             buildConfigField "boolean", "activeSwipeNavigator", "false"
             buildConfigField "boolean", "activeButtonNavigator", "true"
@@ -169,7 +187,8 @@ android {
         }
         cnm {
             applicationId 'org.eyeseetea.surveillance_cnm_bb'
-            versionName "0.1.0"
+            versionName "0.2.0"
+            buildConfigField "boolean", "activeMonitoringFragment", "false"
             buildConfigField "boolean", "reviewScreen", "true"
             buildConfigField "boolean", "activeSwipeNavigator", "true"
             buildConfigField "boolean", "activeButtonNavigator", "false"
@@ -184,6 +203,7 @@ android {
             buildConfigField "int", "LimitSurveysCount", "0"
             buildConfigField "int", "LimitSurveysTimeHours", "0"
             buildConfigField "boolean", "customfont", "true"
+            buildConfigField "String", "defaultLocale", "\"en\""
             buildConfigField "int", "maxDaysForDeletingSentSurveys", "14"
             buildConfigField "boolean", "performMaintenanceTasks", "false"
             buildConfigField "boolean", "exitFromSurveyToImproveTab", "true"
@@ -198,6 +218,10 @@ android {
         arguments {
             targetModuleName 'EyeSeeTea'
         }
+    }
+
+    sourceSets {
+        androidTest.java.srcDirs += 'src/sharedAndroidTest'
     }
 }
 
@@ -218,11 +242,12 @@ dependencies {
     apply plugin: 'com.github.dcendents.android-maven'
 
     //Android support
+    compile "com.android.support:support-annotations:${libs.supportVersion}"
     compile "com.android.support:support-v4:${libs.supportVersion}"
     compile "com.android.support:appcompat-v7:${libs.supportVersion}"
     compile "com.android.support:support-annotations:${libs.supportVersion}"
     compile "com.android.support:multidex:${libs.multidex}"
-    compile 'com.android.support:recyclerview-v7:25.1.0'
+    compile "com.android.support:recyclerview-v7:${libs.supportVersion}"
     //3rd party dependencies
     compile "com.opencsv:opencsv:${libs.opencsvVersion}"
     compile "com.google.android.gms:play-services:${libs.gmsPlayVersion}"
@@ -245,7 +270,7 @@ dependencies {
 
     // Unit testing dependencies
     testCompile "junit:junit:${libs.jUnitVersion}"
-    testCompile 'com.squareup.okhttp3:mockwebserver:3.2.0'
+    testCompile "com.squareup.okhttp3:mockwebserver:${libs.mockwebserverVersion}"
 
     // Instrumented tests dependencies
     // Android Testing Support Library's runner and rules
@@ -260,8 +285,7 @@ dependencies {
     androidTestCompile "com.android.support.test.espresso:espresso-idling-resource:${libs.espressoVersion}"
     // Espresso-web for WebView support
     androidTestCompile "com.android.support.test.espresso:espresso-web:${libs.espressoVersion}"
-    androidTestCompile 'com.squareup.okhttp3:mockwebserver:3.2.0'
-
+    androidTestCompile "com.squareup.okhttp3:mockwebserver:${libs.mockwebserverVersion}"
 
     //Tracking crashes
     compile("com.crashlytics.sdk.android:crashlytics:${libs.crashlyticsVersion}") {

@@ -24,6 +24,7 @@ import android.util.Log;
 import com.raizlabs.android.dbflow.annotation.Column;
 import com.raizlabs.android.dbflow.annotation.PrimaryKey;
 import com.raizlabs.android.dbflow.annotation.Table;
+import com.raizlabs.android.dbflow.sql.language.Delete;
 import com.raizlabs.android.dbflow.sql.language.Select;
 import com.raizlabs.android.dbflow.structure.BaseModel;
 
@@ -62,10 +63,18 @@ public class QuestionRelationDB extends BaseModel {
 
     public static final int TREATMENT_MATCH = 5;
 
+    public static final int MATCH_WITH_OPTION_ATTRIBUTE = 6;
+
     /**
-     * This mMatchDB propagate the value from questionrelation mQuestionDB to the matched mQuestionDB
+     * This mMatchDB propagate the value from questionrelation mQuestionDB to the matched
+     * mQuestionDB
      */
     public static final int MATCH_PROPAGATE = 6;
+
+    /**
+     * Hide an option if question threshold match with this option
+     */
+    public static final int MATCH_HIDE_OPTION_QUESTION_THRESHOLD = 7;
 
     private static final String TAG = ".QuestionRelationDB";
     @Column
@@ -113,6 +122,12 @@ public class QuestionRelationDB extends BaseModel {
 
     public static void deleteAll() {
         deleteQuestionRelations(listAll());
+    }
+
+    public static void deleteQuestionRelationById(long question_id) {
+        new Delete()
+                .from(QuestionRelationDB.class)
+                .where(QuestionRelationDB_Table.id_question_fk.eq(question_id));
     }
 
     /**
