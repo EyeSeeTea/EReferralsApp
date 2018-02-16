@@ -22,6 +22,7 @@ package org.eyeseetea.malariacare.data.database.model;
 import com.raizlabs.android.dbflow.annotation.Column;
 import com.raizlabs.android.dbflow.annotation.PrimaryKey;
 import com.raizlabs.android.dbflow.annotation.Table;
+import com.raizlabs.android.dbflow.sql.language.Delete;
 import com.raizlabs.android.dbflow.sql.language.Select;
 import com.raizlabs.android.dbflow.structure.BaseModel;
 
@@ -81,6 +82,12 @@ public class AnswerDB extends BaseModel {
                 .where(AnswerDB_Table.id_answer.eq(id)).querySingle();
     }
 
+    public static void deleteById(Long id) {
+         new Delete()
+                .from(AnswerDB.class)
+                .where(AnswerDB_Table.id_answer.eq(id));
+    }
+
     public Long getId_answer() {
         return id_answer;
     }
@@ -102,7 +109,20 @@ public class AnswerDB extends BaseModel {
             mOptionDBs = new Select()
                     .from(OptionDB.class)
                     .where(OptionDB_Table.id_answer_fk
-                            .eq(this.getId_answer())).queryList();
+                            .eq(this.getId_answer()))
+                    .queryList();
+        }
+        return mOptionDBs;
+    }
+
+    public List<OptionDB> getOptionDBsOrderByName() {
+        if (mOptionDBs == null) {
+            mOptionDBs = new Select()
+                    .from(OptionDB.class)
+                    .where(OptionDB_Table.id_answer_fk
+                            .eq(this.getId_answer()))
+                    .orderBy(OptionDB_Table.name, true)
+                    .queryList();
         }
         return mOptionDBs;
     }

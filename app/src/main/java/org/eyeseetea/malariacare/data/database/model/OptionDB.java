@@ -22,6 +22,7 @@ package org.eyeseetea.malariacare.data.database.model;
 import com.raizlabs.android.dbflow.annotation.Column;
 import com.raizlabs.android.dbflow.annotation.PrimaryKey;
 import com.raizlabs.android.dbflow.annotation.Table;
+import com.raizlabs.android.dbflow.sql.language.Delete;
 import com.raizlabs.android.dbflow.sql.language.Select;
 import com.raizlabs.android.dbflow.structure.BaseModel;
 
@@ -29,6 +30,7 @@ import org.eyeseetea.malariacare.data.database.AppDatabase;
 import org.eyeseetea.malariacare.data.database.utils.Session;
 import org.eyeseetea.malariacare.utils.Utils;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Table(database = AppDatabase.class, name = "Option")
@@ -59,6 +61,28 @@ public class OptionDB extends BaseModel {
      */
     AnswerDB mAnswerDB;
 
+    public boolean hasMatches(){
+        return matchQuestionsCode !=null;
+    }
+    public List<String> getMatchQuestionsCode() {
+        return matchQuestionsCode;
+    }
+
+    public void setMatchQuestionsCode(List<String> matchQuestionsCode) {
+        this.matchQuestionsCode = matchQuestionsCode;
+    }
+
+    private List<String> matchQuestionsCode;
+
+
+    public long getId_option_attribute_fk() {
+        return id_option_attribute_fk;
+    }
+
+    public void setId_option_attribute_fk(long id_option_attribute_fk) {
+        this.id_option_attribute_fk = id_option_attribute_fk;
+    }
+
     @Column
     long id_option_attribute_fk;
 
@@ -71,6 +95,9 @@ public class OptionDB extends BaseModel {
      * List of values that has choosen this mOptionDB
      */
     List<ValueDB> mValueDBs;
+
+    @Column
+    Long id_parent_fk;
 
     public OptionDB() {
     }
@@ -97,6 +124,10 @@ public class OptionDB extends BaseModel {
         return new Select().from(OptionDB.class).queryList();
     }
 
+    public static int getOptionsDBCount(){
+        return getAllOptions().size();
+    }
+
     public static void deleteAll() {
         for (OptionDB optionDB : getAllOptions()) {
             optionDB.delete();
@@ -119,6 +150,19 @@ public class OptionDB extends BaseModel {
         return new Select()
                 .from(OptionDB.class)
                 .where(OptionDB_Table.code.eq(code)).querySingle();
+    }
+
+    public static OptionDB findByNameAndCode(String name, String code) {
+        return new Select()
+                .from(OptionDB.class)
+                .where(OptionDB_Table.name.eq(name))
+                .and(OptionDB_Table.code.eq(code)).querySingle();
+    }
+
+    public static void deleteByAnswer(long answerID) {
+         new Delete()
+                .from(OptionDB.class)
+                .where(OptionDB_Table.id_answer_fk.eq(answerID));
     }
 
 
@@ -176,6 +220,24 @@ public class OptionDB extends BaseModel {
     public void setAnswerDB(AnswerDB answerDB) {
         this.mAnswerDB = answerDB;
         this.id_answer_fk = (answerDB != null) ? answerDB.getId_answer() : null;
+    }
+
+    public Long getId_parent_fk() {
+        return id_parent_fk;
+    }
+
+    public OptionDB get_parent() {
+        if (id_parent_fk == null) {
+            return null;
+        }
+        return new Select()
+                .from(OptionDB.class)
+                .where(OptionDB_Table.id_option
+                        .is(id_parent_fk)).querySingle();
+    }
+
+    public void setId_parent_fk(Long id_parent_fk) {
+        this.id_parent_fk = id_parent_fk;
     }
 
     public OptionAttributeDB getOptionAttributeDB() {
@@ -244,6 +306,13 @@ public class OptionDB extends BaseModel {
         return idOption.equals(valueIdOption);
     }
 
+    public static List<OptionDB> getOptionWithParent(Long id_parent_fk) {
+        return new Select()
+                .from(OptionDB.class)
+                .where(OptionDB_Table.id_parent_fk
+                        .is(id_parent_fk)).queryList();
+    }
+
     /**
      * Gets the QuestionDB of this OptionDB in session
      */
@@ -295,6 +364,15 @@ public class OptionDB extends BaseModel {
         return mValueDBs;
     }
 
+    public static List<OptionDB> getOptionsWithParentAndQuestion(Long parent,
+            QuestionDB questionDB) {
+        return new Select().from(OptionDB.class)
+                .where(OptionDB_Table.id_answer_fk.eq(questionDB.getAnswerDB().getId_answer()))
+                .and(OptionDB_Table.id_parent_fk.eq(parent))
+                .orderBy(OptionDB_Table.name, true)
+                .queryList();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -302,7 +380,6 @@ public class OptionDB extends BaseModel {
 
         OptionDB optionDB = (OptionDB) o;
 
-        if (id_option != optionDB.id_option) return false;
         if (id_option_attribute_fk != optionDB.id_option_attribute_fk) return false;
         if (code != null ? !code.equals(optionDB.code) : optionDB.code != null) return false;
         if (name != null ? !name.equals(optionDB.name) : optionDB.name != null) return false;
@@ -333,7 +410,11 @@ public class OptionDB extends BaseModel {
                 ", name='" + name + '\'' +
                 ", factor=" + factor +
                 ", id_answer_fk=" + id_answer_fk +
+                ", mAnswerDB=" + mAnswerDB +
                 ", id_option_attribute_fk=" + id_option_attribute_fk +
+                ", mOptionAttributeDB=" + mOptionAttributeDB +
+                ", mValueDBs=" + mValueDBs +
+                ", id_parent_fk=" + id_parent_fk +
                 '}';
     }
 
@@ -342,4 +423,16 @@ public class OptionDB extends BaseModel {
         super.delete();
     }
 
+    public static class OptionComparator implements Comparator {
+
+        @Override
+        public int compare(Object o1, Object o2) {
+
+            OptionDB optionDB1 = (OptionDB) o1;
+            OptionDB optionDB2 = (OptionDB) o2;
+            return new Integer(
+                    optionDB1.getInternationalizedName().compareTo(
+                            optionDB2.getInternationalizedName()));
+        }
+    }
 }
