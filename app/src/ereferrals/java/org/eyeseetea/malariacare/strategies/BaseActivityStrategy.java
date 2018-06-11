@@ -48,6 +48,7 @@ import org.eyeseetea.malariacare.services.PushService;
 import org.eyeseetea.malariacare.services.strategies.PushServiceStrategy;
 import org.eyeseetea.malariacare.utils.ConnectivityStatus;
 import org.eyeseetea.malariacare.utils.LockScreenStatus;
+import org.eyeseetea.malariacare.utils.Utils;
 
 public class BaseActivityStrategy extends ABaseActivityStrategy {
 
@@ -284,7 +285,7 @@ public class BaseActivityStrategy extends ABaseActivityStrategy {
     @Override
     public void showAbout(final int titleId, int rawId, final Context context) {
         final String stringMessage = mBaseActivity.getMessageWithCommit(rawId, context);
-        IAppInfoRepository appInfoDataSource = new AppInfoDataSource();
+        IAppInfoRepository appInfoDataSource = new AppInfoDataSource(context);
         IMainExecutor mainExecutor = new UIThreadExecutor();
         IAsyncExecutor asyncExecutor = new AsyncExecutor();
         GetAppInfoUseCase getAppInfoUseCase = new GetAppInfoUseCase(mainExecutor, asyncExecutor,
@@ -296,6 +297,10 @@ public class BaseActivityStrategy extends ABaseActivityStrategy {
                 aboutBuilder.append(
                         String.format(context.getResources().getString(R.string.config_version),
                                 appInfo.getConfigFileVersion()));
+                aboutBuilder.append("<br/>");
+                aboutBuilder.append(
+                        String.format(context.getResources().getString(R.string.metadata_update),
+                                getUpdateDateFromAppInfo(appInfo)));
                 aboutBuilder.append(stringMessage);
                 final SpannableString linkedMessage = new SpannableString(
                         Html.fromHtml(aboutBuilder.toString()));
@@ -307,6 +312,14 @@ public class BaseActivityStrategy extends ABaseActivityStrategy {
 
     }
 
+    private String getUpdateDateFromAppInfo(AppInfo appInfo) {
+        if (appInfo.getUpdateMetadataDate() == null) {
+            return " - ";
+        }
+        return Utils.parseDateToString(appInfo.getUpdateMetadataDate(),
+                "MM/dd/yyyy HH:mm:ss");
+    }
+
     private BroadcastReceiver pushReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -316,6 +329,7 @@ public class BaseActivityStrategy extends ABaseActivityStrategy {
 
     private void showLoginIfConfigFileObsolete(Intent intent) {
         if (intent.getBooleanExtra(PushServiceStrategy.SHOW_LOGIN, false)) {
+            SurveyFragment.closeKeyboard();
             showLogin(true);
         }
     }
