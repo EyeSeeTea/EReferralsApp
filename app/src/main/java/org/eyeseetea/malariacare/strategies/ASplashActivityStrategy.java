@@ -1,23 +1,16 @@
 package org.eyeseetea.malariacare.strategies;
 
-import static org.eyeseetea.malariacare.services.strategies.APushServiceStrategy.TAG;
-
 import android.app.Activity;
 import android.content.Intent;
 import android.util.Log;
 
-import org.eyeseetea.malariacare.BuildConfig;
-import org.eyeseetea.malariacare.data.authentication.CredentialsReader;
 import org.eyeseetea.malariacare.data.database.model.TabDB;
-import org.eyeseetea.malariacare.domain.boundary.IConnectivityManager;
 import org.eyeseetea.malariacare.domain.exception.LoadingNavigationControllerException;
 import org.eyeseetea.malariacare.domain.exception.WarningException;
-import org.eyeseetea.malariacare.domain.usecase.DownloadLanguageTranslationUseCase;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullFilters;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullStep;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullUseCase;
 import org.eyeseetea.malariacare.layout.adapters.survey.navigation.NavigationBuilder;
-import org.eyeseetea.malariacare.network.factory.NetworkManagerFactory;
 
 
 public abstract class ASplashActivityStrategy {
@@ -92,7 +85,11 @@ public abstract class ASplashActivityStrategy {
         return true;
     }
 
-    public void downloadLanguagesFromServer() throws Exception {
+    public void downloadLanguagesFromServer() {
+        //By default, variants do nothing
+    }
 
+    public void init(SplashActivityStrategy.Callback callback) {
+        callback.onSuccess();
     }
 }

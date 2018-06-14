@@ -29,6 +29,10 @@ public class AppInfo {
         return metadataVersion;
     }
 
+    public void changeMetadataDownloaded(boolean metadataDownloaded) {
+        this.metadataDownloaded = metadataDownloaded;
+    }
+
     public String getConfigFileVersion() {
         return configFileVersion;
     }
@@ -37,11 +41,24 @@ public class AppInfo {
         return appVersion;
     }
 
+    public void changeMetadataVersion(String metadataVersion) {
+        this.metadataVersion = metadataVersion;
+    }
+
     public boolean isMetadataDownloaded() {
         return metadataDownloaded;
     }
 
     public Date getUpdateMetadataDate() {
         return updateMetadataDate;
+    }
+
+    @Override
+    public String toString() {
+        return "AppInfo{" +
+                "metadataVersion='" + metadataVersion + '\'' +
+                ", appVersion='" + appVersion + '\'' +
+                ", metadataDownloaded=" + metadataDownloaded +
+                '}';
     }
 }
