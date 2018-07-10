@@ -41,7 +41,6 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.eyeseetea.malariacare.data.database.model.ProgramDB;
 import org.eyeseetea.malariacare.data.database.model.SurveyDB;
 import org.eyeseetea.malariacare.data.database.utils.ExportData;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
@@ -121,7 +120,7 @@ public abstract class BaseActivity extends ActionBarActivity {
             }
         } else {
             Intent homeIntent = new Intent(Intent.ACTION_MAIN);
-            homeIntent.addCategory( Intent.CATEGORY_HOME );
+            homeIntent.addCategory(Intent.CATEGORY_HOME);
             homeIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
             startActivity(homeIntent);
         }
@@ -165,14 +164,7 @@ public abstract class BaseActivity extends ActionBarActivity {
      * Adds actionbar to the activity
      */
     public void createActionBar() {
-        ProgramDB programDB = ProgramDB.getFirstProgram();
-
-        if (programDB != null) {
-            android.support.v7.app.ActionBar actionBar = this.getSupportActionBar();
-            LayoutUtils.setActionBarLogo(actionBar);
-            LayoutUtils.setActionBarText(actionBar, PreferencesState.getInstance().getOrgUnit(),
-                    this.getResources().getString(R.string.malaria_case_based_reporting));
-        }
+        mBaseActivityStrategy.createActionBar();
     }
 
     /**
@@ -305,7 +297,7 @@ public abstract class BaseActivity extends ActionBarActivity {
      * @param targetActivityClass Given target activity class
      */
     public void finishAndGo(Class targetActivityClass) {
-        Intent targetActivityIntent = new Intent(this, targetActivityClass);
+        Intent targetActivityIntent = new Intent(this.getApplicationContext(), targetActivityClass);
         finish();
         startActivity(targetActivityIntent);
     }
@@ -316,7 +308,7 @@ public abstract class BaseActivity extends ActionBarActivity {
      * @param targetActivityClass Given target activity class
      */
     public void go(Class targetActivityClass) {
-        Intent targetActivityIntent = new Intent(this, targetActivityClass);
+        Intent targetActivityIntent = new Intent(this.getApplicationContext(), targetActivityClass);
         startActivity(targetActivityIntent);
     }
 
@@ -341,7 +333,7 @@ public abstract class BaseActivity extends ActionBarActivity {
      * @param rawId   Id of the raw text resource in HTML format
      */
     public void showAlertWithHtmlMessage(int titleId, int rawId) {
-        InputStream message = getApplicationContext().getResources().openRawResource(rawId);
+        InputStream message = getResources().openRawResource(rawId);
         final SpannableString linkedMessage = new SpannableString(
                 Html.fromHtml(Utils.convertFromInputStreamToString(message).toString()));
         Linkify.addLinks(linkedMessage, Linkify.ALL);
@@ -418,7 +410,7 @@ public abstract class BaseActivity extends ActionBarActivity {
      */
     private void showAlert(int titleId, CharSequence text) {
         final AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(getApplicationContext().getString(titleId))
+                .setTitle(getString(titleId))
                 .setMessage(text)
                 .setNeutralButton(android.R.string.ok, null).create();
         dialog.show();
