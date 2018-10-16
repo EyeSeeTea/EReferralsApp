@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.AsyncTask;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
@@ -21,9 +22,17 @@ import android.widget.TextView;
 
 import org.eyeseetea.malariacare.DashboardActivity;
 import org.eyeseetea.malariacare.R;
+import org.eyeseetea.malariacare.data.database.model.ProgramDB;
 import org.eyeseetea.malariacare.data.database.model.SurveyDB;
 import org.eyeseetea.malariacare.data.database.model.TabDB;
+import org.eyeseetea.malariacare.data.database.model.UserDB;
 import org.eyeseetea.malariacare.data.database.utils.LocationMemory;
+import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
+import org.eyeseetea.malariacare.data.database.utils.Session;
+import org.eyeseetea.malariacare.domain.exception.ApiCallException;
+import org.eyeseetea.malariacare.data.repositories.ProgramRepository;
+import org.eyeseetea.malariacare.domain.boundary.repositories.IProgramRepository;
+import org.eyeseetea.malariacare.domain.entity.Program;
 import org.eyeseetea.malariacare.domain.exception.EmptyLocationException;
 import org.eyeseetea.malariacare.domain.exception.LoadingNavigationControllerException;
 import org.eyeseetea.malariacare.fragments.DashboardSentFragment;
@@ -33,7 +42,9 @@ import org.eyeseetea.malariacare.layout.adapters.survey.DynamicTabAdapter;
 import org.eyeseetea.malariacare.layout.adapters.survey.navigation.NavigationBuilder;
 import org.eyeseetea.malariacare.layout.listeners.SurveyLocationListener;
 import org.eyeseetea.malariacare.layout.utils.LayoutUtils;
+import org.eyeseetea.malariacare.network.ServerAPIController;
 import org.eyeseetea.malariacare.utils.GradleVariantConfig;
+import org.eyeseetea.malariacare.views.dialog.AnnouncementMessageDialog;
 
 public abstract class ADashboardActivityStrategy {
     private final static String TAG = ".DashActivityStrategy";
@@ -43,6 +54,12 @@ public abstract class ADashboardActivityStrategy {
     protected MonitorFragment monitorFragment;
 
     public void onCreate() {
+        if (mDashboardActivity.getIntent().getBooleanExtra(
+                mDashboardActivity.getString(R.string.show_announcement_key), true)
+                && Session.getCredentials() != null
+                && !Session.getCredentials().isDemoCredentials()) {
+            new AsyncAnnouncement().execute();
+        }
     }
 
     public abstract void reloadStockFragment(Activity activity);
@@ -202,7 +219,12 @@ public abstract class ADashboardActivityStrategy {
 
 
     public void initNavigationController() throws LoadingNavigationControllerException {
-        NavigationBuilder.getInstance().buildController(TabDB.getFirstTab());
+        IProgramRepository programRepository = new ProgramRepository();
+        Program userProgram = programRepository.getUserProgram();
+        ProgramDB program = ProgramDB.findByName(userProgram.getCode());
+
+        TabDB userProgramTab = TabDB.findTabByProgram(program.getId_program()).get(0);
+        NavigationBuilder.getInstance().buildController(userProgramTab);
     }
 
     public void onUnsentTabSelected(DashboardActivity dashboardActivity) {
@@ -385,5 +407,40 @@ public abstract class ADashboardActivityStrategy {
 
     public boolean isStockTableFragmentActive(DashboardActivity dashboardActivity) {
         return false;
+    }
+
+    protected class AsyncAnnouncement extends AsyncTask<Void, Void, Void> {
+        UserDB mLoggedUserDB;
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            mLoggedUserDB = UserDB.getLoggedUser();
+            if (mLoggedUserDB != null) {
+                try {
+                    mLoggedUserDB = ServerAPIController.pullUserAttributes(mLoggedUserDB);
+                } catch (ApiCallException e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            super.onPostExecute(aVoid);
+            if (mLoggedUserDB != null) {
+                if (mLoggedUserDB.getAnnouncement() != null
+                        && !mLoggedUserDB.getAnnouncement().equals("")
+                        && !PreferencesState.getInstance().isUserAccept()) {
+                    Log.d(TAG, "show logged announcement");
+                    AnnouncementMessageDialog.showAnnouncement(R.string.admin_announcement,
+                            mLoggedUserDB.getAnnouncement(),
+                            mDashboardActivity);
+                } else {
+                    AnnouncementMessageDialog.checkUserClosed(mLoggedUserDB,
+                            mDashboardActivity);
+                }
+            }
+        }
     }
 }

@@ -2,11 +2,11 @@ package org.eyeseetea.malariacare.data.authentication.api;
 
 import android.support.annotation.NonNull;
 
-import com.squareup.okhttp.Credentials;
-
 import org.eyeseetea.malariacare.data.authentication.CredentialsReader;
 import org.eyeseetea.malariacare.data.database.utils.Session;
 import org.eyeseetea.malariacare.domain.exception.ConfigJsonIOException;
+
+import okhttp3.Credentials;
 
 public class AuthenticationApi {
 
@@ -24,12 +24,12 @@ public class AuthenticationApi {
     }
 
     @NonNull
-    static String getHardcodedApiUser() throws ConfigJsonIOException {
+    public static String getHardcodedApiUser() throws ConfigJsonIOException {
         return CredentialsReader.getInstance().getUser();
     }
 
     @NonNull
-    static String getHardcodedApiPass() throws ConfigJsonIOException {
+    public static String getHardcodedApiPass() throws ConfigJsonIOException {
         return CredentialsReader.getInstance().getPassword();
     }
 }

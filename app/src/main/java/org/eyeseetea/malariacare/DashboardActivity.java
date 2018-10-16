@@ -46,17 +46,16 @@ import android.widget.TabHost;
 import android.widget.TabWidget;
 import android.widget.TextView;
 
-import org.eyeseetea.malariacare.data.authentication.AuthenticationManager;
 import org.eyeseetea.malariacare.data.database.datasources.SurveyLocalDataSource;
 import org.eyeseetea.malariacare.data.database.model.SurveyDB;
 import org.eyeseetea.malariacare.data.database.model.UserDB;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.Session;
-import org.eyeseetea.malariacare.domain.boundary.IAuthenticationManager;
 import org.eyeseetea.malariacare.domain.exception.ApiCallException;
 import org.eyeseetea.malariacare.domain.exception.LoadingNavigationControllerException;
 import org.eyeseetea.malariacare.domain.usecase.LogoutUseCase;
 import org.eyeseetea.malariacare.domain.usecase.RemoveSurveysInProgressUseCase;
+import org.eyeseetea.malariacare.factories.AuthenticationFactoryStrategy;
 import org.eyeseetea.malariacare.fragments.ReviewFragment;
 import org.eyeseetea.malariacare.fragments.SurveyFragment;
 import org.eyeseetea.malariacare.layout.adapters.survey.DynamicTabAdapter;
@@ -68,7 +67,6 @@ import org.eyeseetea.malariacare.presentation.executors.UIThreadExecutor;
 import org.eyeseetea.malariacare.receivers.AlarmPushReceiver;
 import org.eyeseetea.malariacare.services.SurveyService;
 import org.eyeseetea.malariacare.strategies.DashboardActivityStrategy;
-import org.eyeseetea.malariacare.strategies.DashboardHeaderStrategy;
 import org.eyeseetea.malariacare.utils.GradleVariantConfig;
 import org.eyeseetea.malariacare.views.dialog.AnnouncementMessageDialog;
 
@@ -354,6 +352,11 @@ public class DashboardActivity extends BaseActivity {
         ft.commit();
     }
 
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        //No call for super(). Bug on API Level > 11.
+    }
+
     public void replaceListFragment(int layout, ListFragment fragment) {
         FragmentTransaction ft = getFragmentTransaction();
         ft.replace(layout, fragment);
@@ -403,6 +406,7 @@ public class DashboardActivity extends BaseActivity {
         mDashboardActivityStrategy.onResume();
         super.onResume();
         mIsInForegroundMode = true;
+        getSurveysFromService();
     }
 
     @Override
@@ -759,11 +763,7 @@ public class DashboardActivity extends BaseActivity {
         Log.d(TAG, "onCreate");
         super.onCreate(savedInstanceState);
         PreferencesState.getInstance().onCreateActivityPreferences(getResources(), getTheme());
-        if (getIntent().getBooleanExtra(getString(R.string.show_announcement_key), true)
-                && Session.getCredentials() != null
-                && !Session.getCredentials().isDemoCredentials()) {
-            new AsyncAnnouncement().execute();
-        }
+
         handler = new Handler(Looper.getMainLooper());
         mDashboardActivityStrategy = new DashboardActivityStrategy(this);
         mDashboardActivityStrategy.onCreate();
@@ -790,7 +790,7 @@ public class DashboardActivity extends BaseActivity {
         initTabHost(savedInstanceState);
         mDashboardActivityStrategy.initTabWidget(tabHost,reviewFragment,surveyFragment,isReadOnly);
 
-        getSurveysFromService();
+
 
         if (BuildConfig.multiuser) {
             try {
@@ -836,8 +836,8 @@ public class DashboardActivity extends BaseActivity {
     }
 
     public void executeLogout() {
-        IAuthenticationManager iAuthenticationManager = new AuthenticationManager(this);
-        LogoutUseCase logoutUseCase = new LogoutUseCase(iAuthenticationManager);
+        LogoutUseCase logoutUseCase =
+                new AuthenticationFactoryStrategy().getLogoutUseCase(this);
         AlarmPushReceiver.cancelPushAlarm(this);
         logoutUseCase.execute(new LogoutUseCase.Callback() {
             @Override
@@ -863,40 +863,6 @@ public class DashboardActivity extends BaseActivity {
         mDashboardActivityStrategy.onConnectivityStatusChange();
     }
 
-    public class AsyncAnnouncement extends AsyncTask<Void, Void, Void> {
-        UserDB mLoggedUserDB;
-
-        @Override
-        protected Void doInBackground(Void... params) {
-            mLoggedUserDB = UserDB.getLoggedUser();
-            if (mLoggedUserDB != null) {
-                try {
-                    mLoggedUserDB = ServerAPIController.pullUserAttributes(mLoggedUserDB);
-                } catch (ApiCallException e) {
-                    return null;
-                }
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Void aVoid) {
-            super.onPostExecute(aVoid);
-            if (mLoggedUserDB != null) {
-                if (mLoggedUserDB.getAnnouncement() != null
-                        && !mLoggedUserDB.getAnnouncement().equals("")
-                        && !PreferencesState.getInstance().isUserAccept()) {
-                    Log.d(TAG, "show logged announcement");
-                    AnnouncementMessageDialog.showAnnouncement(R.string.admin_announcement,
-                            mLoggedUserDB.getAnnouncement(),
-                            DashboardActivity.this);
-                } else {
-                    AnnouncementMessageDialog.checkUserClosed(mLoggedUserDB,
-                            DashboardActivity.this);
-                }
-            }
-        }
-    }
 
     public TabHost getTabHost() {
         return tabHost;
