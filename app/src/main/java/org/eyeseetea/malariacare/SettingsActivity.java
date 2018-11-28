@@ -22,8 +22,6 @@ package org.eyeseetea.malariacare;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
@@ -31,18 +29,16 @@ import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceCategory;
 import android.preference.PreferenceManager;
-import android.util.DisplayMetrics;
+import android.util.Log;
 
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.strategies.SettingsActivityStrategy;
 import org.eyeseetea.malariacare.utils.LanguageContextWrapper;
+import org.eyeseetea.malariacare.utils.Utils;
 import org.eyeseetea.malariacare.views.AutoCompleteEditTextPreference;
-import org.eyeseetea.sdk.presentation.styles.FontStyle;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * A {@link PreferenceActivity} that presents a set of application settings. On
@@ -97,7 +93,7 @@ public class SettingsActivity extends PreferenceActivity implements
             };
     public SettingsActivityStrategy mSettingsActivityStrategy = new SettingsActivityStrategy(this);
     public AutoCompleteEditTextPreference autoCompleteEditTextPreference;
-    public Preference serverUrlPreference;
+
 
     /**
      * Binds a preference's summary to its value. More specifically, when the
@@ -123,15 +119,13 @@ public class SettingsActivity extends PreferenceActivity implements
     /**
      * Sets the application languages and populate the language in the preference
      */
-    private static void setLanguageOptions(Preference preference) {
-        ListPreference listPreference = (ListPreference) preference;
-
-        listPreference.setEntries(R.array.languages_strings);
-        listPreference.setEntryValues(R.array.languages_codes);
+    private void setLanguageOptions(Preference preference) {
+        mSettingsActivityStrategy.setLanguageOptions(preference);
     }
 
 
     protected void onCreate(Bundle savedInstanceState) {
+        Log.d(TAG, "AndroidLifeCycle: onCreate");
         super.onCreate(savedInstanceState);
         PreferencesState.getInstance().onCreateActivityPreferences(getResources(), getTheme());
         mSettingsActivityStrategy.onCreate();
@@ -145,6 +139,7 @@ public class SettingsActivity extends PreferenceActivity implements
 
     @Override
     public void onStop() {
+        Log.d(TAG, "AndroidLifeCycle: onStop");
         mSettingsActivityStrategy.onStop();
 
         super.onStop();
@@ -164,8 +159,11 @@ public class SettingsActivity extends PreferenceActivity implements
 
 
         if (BuildConfig.translations) {
-            setLanguageOptions(
-                    findPreference(getApplicationContext().getString(R.string.language_code)));
+            Preference languagePreference = findPreference(
+                    getApplicationContext().getString(R.string.language_code));
+            setLanguageOptions(languagePreference);
+
+            translatePreferenceString(languagePreference);
         }
 
         // Bind the summaries of EditText/List/Dialog/Ringtone preferences to
@@ -176,12 +174,13 @@ public class SettingsActivity extends PreferenceActivity implements
                     findPreference(getApplicationContext().getString(R.string.language_code)));
         }
 
-        bindPreferenceSummaryToValue(
-                findPreference(getApplicationContext().getString(R.string.font_sizes)));
-        bindPreferenceSummaryToValue(
-                findPreference(getApplicationContext().getString(R.string.dhis_url)));
-        bindPreferenceSummaryToValue(
-                findPreference(getApplicationContext().getString(R.string.org_unit)));
+        Preference fontSizePreference = findPreference(
+                getApplicationContext().getString(R.string.font_sizes));
+        bindPreferenceSummaryToValue(fontSizePreference);
+        translatePreferenceString(fontSizePreference);
+        Preference orgUnitPreference=findPreference(getApplicationContext().getString(R.string.org_unit));
+        bindPreferenceSummaryToValue(orgUnitPreference);
+        translatePreferenceString(orgUnitPreference);
 
         autoCompleteEditTextPreference = (AutoCompleteEditTextPreference) findPreference(
                 getApplicationContext().getString(R.string.org_unit));
@@ -190,10 +189,6 @@ public class SettingsActivity extends PreferenceActivity implements
         autoCompleteEditTextPreference.pullOrgUnits();
 
         autoCompleteEditTextPreference.setContext(this);
-        serverUrlPreference = (Preference) findPreference(
-                getApplicationContext().getResources().getString(R.string.dhis_url));
-        serverUrlPreference.setOnPreferenceClickListener(
-                mSettingsActivityStrategy.getOnPreferenceClickListener());
 
         mSettingsActivityStrategy.setupPreferencesScreen(getPreferenceScreen());
 
@@ -201,15 +196,11 @@ public class SettingsActivity extends PreferenceActivity implements
             PreferenceCategory preferenceCategory =
                     (PreferenceCategory) getPreferenceScreen().findPreference(
                             this.getResources().getString(R.string.pref_visual));
-            preferenceCategory.removePreference(getPreferenceScreen().findPreference(
-                    this.getResources().getString(R.string.font_sizes)));
+            preferenceCategory.removePreference(fontSizePreference);
             preferenceCategory.removePreference(getPreferenceScreen().findPreference(
                     this.getResources().getString(R.string.customize_fonts)));
         }
         if (mSettingsActivityStrategy.getOnPreferenceChangeListener() != null) {
-            serverUrlPreference.setOnPreferenceChangeListener(
-                    mSettingsActivityStrategy.getOnPreferenceChangeListener());
-
             autoCompleteEditTextPreference.setOnPreferenceChangeListener(
                     mSettingsActivityStrategy.getOnPreferenceChangeListener());
         }
@@ -232,6 +223,7 @@ public class SettingsActivity extends PreferenceActivity implements
         listPreference.setEntryValues(entryValues.toArray(new CharSequence[entryValues.size()]));
         CheckBoxPreference customizeFont = ((CheckBoxPreference)getPreferenceScreen().findPreference(
                 this.getResources().getString(R.string.customize_fonts)));
+        translatePreferenceString(customizeFont);
         if(customizeFont.isChecked()) {
             for(int i=0; listPreference.getEntryValues().length>i;i++){
                 if(listPreference.getEntryValues()[i].equals(listPreference.getValue())){
@@ -252,6 +244,7 @@ public class SettingsActivity extends PreferenceActivity implements
 
     @Override
     protected void onResume() {
+        Log.d(TAG, "AndroidLifeCycle: onResume");
         super.onResume();
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         sharedPreferences.registerOnSharedPreferenceChangeListener(this);
@@ -259,6 +252,7 @@ public class SettingsActivity extends PreferenceActivity implements
 
     @Override
     protected void onPause() {
+        Log.d(TAG, "AndroidLifeCycle: onPause");
         super.onPause();
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this);
@@ -306,6 +300,7 @@ public class SettingsActivity extends PreferenceActivity implements
 
     @Override
     protected void onStart() {
+        Log.d(TAG, "AndroidLifeCycle: onStart");
         mSettingsActivityStrategy.onStart();
         super.onStart();
     }
@@ -318,6 +313,7 @@ public class SettingsActivity extends PreferenceActivity implements
 
     @Override
     protected void onDestroy() {
+        Log.d(TAG, "AndroidLifeCycle: onDestroy");
         mSettingsActivityStrategy.onDestroy();
         super.onDestroy();
     }
@@ -327,5 +323,15 @@ public class SettingsActivity extends PreferenceActivity implements
         String currentLanguage = PreferencesState.getInstance().getCurrentLocale();
         Context context = LanguageContextWrapper.wrap(newBase, currentLanguage);
         super.attachBaseContext(context);
+    }
+
+    @Override
+    protected void onRestart() {
+        super.onRestart();
+        Log.d(TAG, "AndroidLifeCycle: onRestart");
+    }
+
+    public void translatePreferenceString(Preference preference) {
+        preference.setTitle(Utils.getInternationalizedString(preference.getTitleRes(),this));
     }
 }

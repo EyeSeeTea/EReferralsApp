@@ -54,10 +54,10 @@ import com.raizlabs.android.dbflow.structure.database.transaction.Transaction;
 import org.eyeseetea.malariacare.R;
 import org.eyeseetea.malariacare.data.IDataSourceCallback;
 import org.eyeseetea.malariacare.data.database.AppDatabase;
-import org.eyeseetea.malariacare.data.database.datasources.ProgramLocalDataSource;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.Session;
 import org.eyeseetea.malariacare.data.database.utils.SurveyAnsweredRatioCache;
+import org.eyeseetea.malariacare.data.repositories.ProgramRepository;
 import org.eyeseetea.malariacare.data.sync.exporter.IConvertToSDKVisitor;
 import org.eyeseetea.malariacare.data.sync.exporter.VisitableToSDK;
 import org.eyeseetea.malariacare.domain.boundary.repositories.IProgramRepository;
@@ -65,7 +65,6 @@ import org.eyeseetea.malariacare.domain.entity.SurveyAnsweredRatio;
 import org.eyeseetea.malariacare.domain.exception.ConversionException;
 import org.eyeseetea.malariacare.strategies.SurveyFragmentStrategy;
 import org.eyeseetea.malariacare.utils.Constants;
-import org.hisp.dhis.client.sdk.android.api.persistence.flow.EventFlow;
 import org.joda.time.DateTime;
 
 import java.util.ArrayList;
@@ -318,10 +317,6 @@ public class SurveyDB extends BaseModel implements VisitableToSDK {
         return uid_event_fk;
     }
 
-    public void setEventUid(EventFlow event) {
-        this.uid_event_fk = event.getUId();
-    }
-
     public void setEventUid(String eventuid) {
         this.uid_event_fk = eventuid;
     }
@@ -348,56 +343,47 @@ public class SurveyDB extends BaseModel implements VisitableToSDK {
      * Returns all the malaria surveys with status yet not put to "Sent"
      */
     public static List<SurveyDB> getAllUnsentMalariaSurveys(String malariaProgramUid) {
-        return new Select().from(SurveyDB.class).as(surveyName)
-                .join(ProgramDB.class, Join.JoinType.LEFT_OUTER).as(programName)
+        return new Select().from(SurveyDB.class).as(surveyName).join(ProgramDB.class,
+                Join.JoinType.LEFT_OUTER).as(programName)
                 .on(SurveyDB_Table.id_program_fk.withTable(surveyAlias)
                         .eq(ProgramDB_Table.id_program.withTable(programAlias)))
-                .where(ProgramDB_Table.uid_program.withTable(programAlias)
-                        .is(malariaProgramUid))
-                .and(SurveyDB_Table.status.withTable(surveyAlias)
-                        .is(Constants.SURVEY_SENDING))
-                .or(SurveyDB_Table.status.withTable(surveyAlias)
+                .where(SurveyDB_Table.status.withTable(surveyAlias)
                         .is(Constants.SURVEY_COMPLETED))
+                .and(ProgramDB_Table.uid_program.withTable(programAlias)
+                        .is(malariaProgramUid))
                 .orderBy(OrderBy.fromProperty(SurveyDB_Table.event_date.withTable(surveyAlias)))
                 .orderBy(OrderBy.fromProperty(
                         SurveyDB_Table.id_org_unit_fk.withTable(surveyAlias))).queryList();
     }
 
-    /**
-     * Returns all the malaria surveys
-     * */
-    public static List<SurveyDB> getAllMalariaSurveys(String malariaProgramUid) {
-            return new Select().from(SurveyDB.class).as(surveyName)
-            .join(ProgramDB.class, Join.JoinType.LEFT_OUTER).as(programName)
-            .on(SurveyDB_Table.id_program_fk.withTable(surveyAlias)
-            .eq(ProgramDB_Table.id_program.withTable(programAlias)))
-
-            .where(ConditionGroup.clause()
-            .and(ProgramDB_Table.uid_program.withTable(programAlias)
-            .is(malariaProgramUid))
-            .and(ConditionGroup.clause()
-            .and(SurveyDB_Table.status.withTable(surveyAlias)
-            .isNot(Constants.SURVEY_IN_PROGRESS))))
-            .orderBy(SurveyDB_Table.event_date, false).queryList();
+    public static List<SurveyDB> getAllSurveysByProgram(String malariaProgramUid) {
+        return new Select().from(SurveyDB.class).as(surveyName).join(ProgramDB.class,
+                Join.JoinType.LEFT_OUTER).as(programName)
+                .on(SurveyDB_Table.id_program_fk.withTable(surveyAlias)
+                        .eq(ProgramDB_Table.id_program.withTable(programAlias)))
+                .where(ProgramDB_Table.uid_program.withTable(programAlias)
+                        .is(malariaProgramUid))
+                .orderBy(OrderBy.fromProperty(SurveyDB_Table.event_date.withTable(surveyAlias)))
+                .orderBy(OrderBy.fromProperty(
+                        SurveyDB_Table.id_org_unit_fk.withTable(surveyAlias))).queryList();
     }
-
     /**
      * Returns all the malaria surveys with status put to "Sent"
      */
     public static List<SurveyDB> getAllSentMalariaSurveys(String malariaProgramUid) {
-            return new Select().from(SurveyDB.class).as(surveyName)
-            .join(ProgramDB.class, Join.JoinType.LEFT_OUTER).as(programName)
-            .on(SurveyDB_Table.id_program_fk.withTable(surveyAlias)
-            .eq(ProgramDB_Table.id_program.withTable(programAlias)))
+        return new Select().from(SurveyDB.class).as(surveyName)
+                .join(ProgramDB.class, Join.JoinType.LEFT_OUTER).as(programName)
+                .on(SurveyDB_Table.id_program_fk.withTable(surveyAlias)
+                        .eq(ProgramDB_Table.id_program.withTable(programAlias)))
 
-            .where(ConditionGroup.clause()
-            .and(ProgramDB_Table.uid_program.withTable(programAlias)
-            .is(malariaProgramUid))
-            .and(ConditionGroup.clause()
-            .and(SurveyDB_Table.status.withTable(surveyAlias)
-            .is(Constants.SURVEY_SENT)))
-            .or(SurveyDB_Table.status.eq(Constants.SURVEY_CONFLICT)))
-            .orderBy(SurveyDB_Table.event_date, false).queryList();
+                .where(ConditionGroup.clause()
+                        .and(ProgramDB_Table.uid_program.withTable(programAlias)
+                                .is(malariaProgramUid))
+                        .and(ConditionGroup.clause()
+                                .and(SurveyDB_Table.status.withTable(surveyAlias)
+                                        .is(Constants.SURVEY_SENT)))
+                        .or(SurveyDB_Table.status.eq(Constants.SURVEY_CONFLICT)))
+                .orderBy(SurveyDB_Table.event_date, false).queryList();
     }
 
     /**
@@ -843,8 +829,8 @@ public class SurveyDB extends BaseModel implements VisitableToSDK {
         int numRequired = 1;
         int numAnswered = 0;
 
-        IProgramRepository programLocalDataSource = new ProgramLocalDataSource();
-        ProgramDB programDB = ProgramDB.findByUID(programLocalDataSource.getUserProgram().getId());
+        IProgramRepository programRepository = new ProgramRepository();
+        ProgramDB programDB = ProgramDB.findByUID(programRepository.getUserProgram().getId());
         TabDB tabDB = programDB.getTabDBs().get(0);
         QuestionDB rootQuestionDB = QuestionDB.findRootQuestion(tabDB);
         QuestionDB localQuestionDB = rootQuestionDB;
@@ -1222,6 +1208,10 @@ public class SurveyDB extends BaseModel implements VisitableToSDK {
                 }).build().execute();
     }
 
+    public boolean isStockSurvey() {
+        return type != Constants.SURVEY_NO_TYPE;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -1264,6 +1254,7 @@ public class SurveyDB extends BaseModel implements VisitableToSDK {
         return type != null ? type.equals(surveyDB.type) : surveyDB.type == null;
 
     }
+
 
     @Override
     public int hashCode() {

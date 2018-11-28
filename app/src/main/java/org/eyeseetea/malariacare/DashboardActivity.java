@@ -31,7 +31,6 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -46,30 +45,26 @@ import android.widget.TabHost;
 import android.widget.TabWidget;
 import android.widget.TextView;
 
-import org.eyeseetea.malariacare.data.authentication.AuthenticationManager;
 import org.eyeseetea.malariacare.data.database.datasources.SurveyLocalDataSource;
 import org.eyeseetea.malariacare.data.database.model.SurveyDB;
-import org.eyeseetea.malariacare.data.database.model.UserDB;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.Session;
-import org.eyeseetea.malariacare.domain.boundary.IAuthenticationManager;
-import org.eyeseetea.malariacare.domain.exception.ApiCallException;
 import org.eyeseetea.malariacare.domain.exception.LoadingNavigationControllerException;
 import org.eyeseetea.malariacare.domain.usecase.LogoutUseCase;
 import org.eyeseetea.malariacare.domain.usecase.RemoveSurveysInProgressUseCase;
+import org.eyeseetea.malariacare.factories.AuthenticationFactoryStrategy;
 import org.eyeseetea.malariacare.fragments.ReviewFragment;
 import org.eyeseetea.malariacare.fragments.SurveyFragment;
 import org.eyeseetea.malariacare.layout.adapters.survey.DynamicTabAdapter;
 import org.eyeseetea.malariacare.layout.score.ScoreRegister;
 import org.eyeseetea.malariacare.layout.utils.LayoutUtils;
-import org.eyeseetea.malariacare.network.ServerAPIController;
 import org.eyeseetea.malariacare.presentation.executors.AsyncExecutor;
 import org.eyeseetea.malariacare.presentation.executors.UIThreadExecutor;
 import org.eyeseetea.malariacare.receivers.AlarmPushReceiver;
 import org.eyeseetea.malariacare.services.SurveyService;
 import org.eyeseetea.malariacare.strategies.DashboardActivityStrategy;
-import org.eyeseetea.malariacare.strategies.DashboardHeaderStrategy;
 import org.eyeseetea.malariacare.utils.GradleVariantConfig;
+import org.eyeseetea.malariacare.utils.Utils;
 import org.eyeseetea.malariacare.views.dialog.AnnouncementMessageDialog;
 
 public class DashboardActivity extends BaseActivity {
@@ -354,6 +349,11 @@ public class DashboardActivity extends BaseActivity {
         ft.commit();
     }
 
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        //No call for super(). Bug on API Level > 11.
+    }
+
     public void replaceListFragment(int layout, ListFragment fragment) {
         FragmentTransaction ft = getFragmentTransaction();
         ft.replace(layout, fragment);
@@ -399,22 +399,23 @@ public class DashboardActivity extends BaseActivity {
 
     @Override
     public void onResume() {
-        Log.d(TAG, "onResume");
+        Log.d(TAG, "AndroidLifeCycle: onResume");
         mDashboardActivityStrategy.onResume();
         super.onResume();
         mIsInForegroundMode = true;
+        getSurveysFromService();
     }
 
     @Override
     protected void onRestart() {
         super.onRestart();
-        Log.i(TAG, "onRestart");
+        Log.d(TAG, "AndroidLifeCycle: onRestart");
     }
 
 
     @Override
     public void onPause() {
-        Log.d(TAG, "onPause");
+        Log.d(TAG, "AndroidLifeCycle: onPause");
         super.onPause();
         mIsInForegroundMode = false;
         mDashboardActivityStrategy.onPause();
@@ -422,7 +423,7 @@ public class DashboardActivity extends BaseActivity {
 
     @Override
     public void onStop() {
-        Log.d(TAG, "onStop");
+        Log.d(TAG, "AndroidLifeCycle: onStop");
         super.onStop();
     }
 
@@ -468,10 +469,14 @@ public class DashboardActivity extends BaseActivity {
     public void confirmExitApp() {
         Log.d(TAG, "back pressed");
         new AlertDialog.Builder(this)
-                .setTitle(R.string.confirmation_really_exit_title)
-                .setMessage(R.string.confirmation_really_exit)
-                .setNegativeButton(android.R.string.no, null)
-                .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                .setTitle(Utils.getInternationalizedString(R.string.confirmation_really_exit_title,
+                        this))
+                .setMessage(
+                        Utils.getInternationalizedString(R.string.confirmation_really_exit, this))
+                .setNegativeButton(Utils.getInternationalizedString(android.R.string.no, this),
+                        null)
+                .setPositiveButton(Utils.getInternationalizedString(android.R.string.yes, this),
+                        new DialogInterface.OnClickListener() {
 
                     public void onClick(DialogInterface arg0, int arg1) {
                         Intent intent = new Intent(Intent.ACTION_MAIN);
@@ -492,8 +497,8 @@ public class DashboardActivity extends BaseActivity {
             int infoMessage = surveyDB.isInProgress() ? R.string.survey_info_exit_delete
                     : R.string.survey_info_exit;
             new AlertDialog.Builder(this)
-                    .setTitle(R.string.survey_info_exit)
-                    .setMessage(infoMessage)
+                    .setTitle(Utils.getInternationalizedString(R.string.survey_info_exit, this))
+                    .setMessage(Utils.getInternationalizedString(infoMessage, this))
                     .setNegativeButton(android.R.string.no, null)
                     .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog, int arg1) {
@@ -648,16 +653,18 @@ public class DashboardActivity extends BaseActivity {
 
     private void showSendSurveyDialog() {
         AlertDialog.Builder msgConfirmation = new AlertDialog.Builder(this)
-                .setTitle(R.string.survey_completed)
-                .setMessage(R.string.survey_completed_text)
+                .setTitle(Utils.getInternationalizedString(R.string.survey_completed, this))
+                .setMessage(Utils.getInternationalizedString(R.string.survey_completed_text, this))
                 .setCancelable(false)
-                .setPositiveButton(R.string.survey_send, new DialogInterface.OnClickListener() {
+                .setPositiveButton(Utils.getInternationalizedString(R.string.survey_send, this),
+                        new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int arg1) {
                         sendSurvey();
                         DynamicTabAdapter.isClicked = false;
                     }
                 });
-        msgConfirmation.setNegativeButton(R.string.survey_review,
+        msgConfirmation.setNegativeButton(
+                Utils.getInternationalizedString(R.string.survey_review, this),
                 new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int arg1) {
                         reviewSurvey();
@@ -759,11 +766,7 @@ public class DashboardActivity extends BaseActivity {
         Log.d(TAG, "onCreate");
         super.onCreate(savedInstanceState);
         PreferencesState.getInstance().onCreateActivityPreferences(getResources(), getTheme());
-        if (getIntent().getBooleanExtra(getString(R.string.show_announcement_key), true)
-                && Session.getCredentials() != null
-                && !Session.getCredentials().isDemoCredentials()) {
-            new AsyncAnnouncement().execute();
-        }
+
         handler = new Handler(Looper.getMainLooper());
         mDashboardActivityStrategy = new DashboardActivityStrategy(this);
         mDashboardActivityStrategy.onCreate();
@@ -790,7 +793,7 @@ public class DashboardActivity extends BaseActivity {
         initTabHost(savedInstanceState);
         mDashboardActivityStrategy.initTabWidget(tabHost,reviewFragment,surveyFragment,isReadOnly);
 
-        getSurveysFromService();
+
 
         if (BuildConfig.multiuser) {
             try {
@@ -807,8 +810,15 @@ public class DashboardActivity extends BaseActivity {
 
     @Override
     protected void onStart() {
+        Log.d(TAG, "AndroidLifeCycle: onStart");
         super.onStart();
         mDashboardActivityStrategy.onStart();
+    }
+
+    @Override
+    protected void onDestroy() {
+        Log.d(TAG, "AndroidLifeCycle: onDestroy");
+        super.onDestroy();
     }
 
     /**
@@ -829,8 +839,8 @@ public class DashboardActivity extends BaseActivity {
     }
 
     public void executeLogout() {
-        IAuthenticationManager iAuthenticationManager = new AuthenticationManager(this);
-        LogoutUseCase logoutUseCase = new LogoutUseCase(iAuthenticationManager);
+        LogoutUseCase logoutUseCase =
+                new AuthenticationFactoryStrategy().getLogoutUseCase(this);
         AlarmPushReceiver.cancelPushAlarm(this);
         logoutUseCase.execute(new LogoutUseCase.Callback() {
             @Override
@@ -856,40 +866,6 @@ public class DashboardActivity extends BaseActivity {
         mDashboardActivityStrategy.onConnectivityStatusChange();
     }
 
-    public class AsyncAnnouncement extends AsyncTask<Void, Void, Void> {
-        UserDB mLoggedUserDB;
-
-        @Override
-        protected Void doInBackground(Void... params) {
-            mLoggedUserDB = UserDB.getLoggedUser();
-            if (mLoggedUserDB != null) {
-                try {
-                    mLoggedUserDB = ServerAPIController.pullUserAttributes(mLoggedUserDB);
-                } catch (ApiCallException e) {
-                    return null;
-                }
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Void aVoid) {
-            super.onPostExecute(aVoid);
-            if (mLoggedUserDB != null) {
-                if (mLoggedUserDB.getAnnouncement() != null
-                        && !mLoggedUserDB.getAnnouncement().equals("")
-                        && !PreferencesState.getInstance().isUserAccept()) {
-                    Log.d(TAG, "show logged announcement");
-                    AnnouncementMessageDialog.showAnnouncement(R.string.admin_announcement,
-                            mLoggedUserDB.getAnnouncement(),
-                            DashboardActivity.this);
-                } else {
-                    AnnouncementMessageDialog.checkUserClosed(mLoggedUserDB,
-                            DashboardActivity.this);
-                }
-            }
-        }
-    }
 
     public TabHost getTabHost() {
         return tabHost;

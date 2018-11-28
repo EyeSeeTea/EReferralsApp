@@ -17,10 +17,12 @@ import android.view.View;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
 import android.widget.TabHost;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.GoogleApiAvailability;
-import com.google.api.client.googleapis.extensions.android.gms.auth.GooglePlayServicesAvailabilityIOException;
+import com.google.api.client.googleapis.extensions.android.gms.auth
+        .GooglePlayServicesAvailabilityIOException;
 import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException;
 
 import org.eyeseetea.malariacare.BuildConfig;
@@ -30,7 +32,6 @@ import org.eyeseetea.malariacare.R;
 import org.eyeseetea.malariacare.data.database.CredentialsLocalDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.ConfigurationLocalDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.LanguagesLocalDataSource;
-import org.eyeseetea.malariacare.data.database.datasources.ProgramLocalDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.SettingsDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.UserAccountDataSource;
 import org.eyeseetea.malariacare.data.database.model.OptionDB;
@@ -44,9 +45,10 @@ import org.eyeseetea.malariacare.data.io.FileDownloader;
 import org.eyeseetea.malariacare.data.io.GooglePlayAppNotAvailableException;
 import org.eyeseetea.malariacare.data.net.ConnectivityManager;
 import org.eyeseetea.malariacare.data.remote.ElementController;
-import org.eyeseetea.malariacare.domain.boundary.IExternalVoucherRegistry;
 import org.eyeseetea.malariacare.data.repositories.MediaRepository;
+import org.eyeseetea.malariacare.data.repositories.ProgramRepository;
 import org.eyeseetea.malariacare.domain.boundary.IConnectivityManager;
+import org.eyeseetea.malariacare.domain.boundary.IExternalVoucherRegistry;
 import org.eyeseetea.malariacare.domain.boundary.executors.IAsyncExecutor;
 import org.eyeseetea.malariacare.domain.boundary.executors.IMainExecutor;
 import org.eyeseetea.malariacare.domain.boundary.io.IFileDownloader;
@@ -58,18 +60,19 @@ import org.eyeseetea.malariacare.domain.boundary.repositories.ISettingsRepositor
 import org.eyeseetea.malariacare.domain.boundary.repositories.IUserRepository;
 import org.eyeseetea.malariacare.domain.entity.Credentials;
 import org.eyeseetea.malariacare.domain.entity.Settings;
-import org.eyeseetea.malariacare.domain.entity.UIDGenerator;
 import org.eyeseetea.malariacare.domain.entity.UserAccount;
 import org.eyeseetea.malariacare.domain.exception.LoadingNavigationControllerException;
 import org.eyeseetea.malariacare.domain.exception.NetworkException;
 import org.eyeseetea.malariacare.domain.exception.NoFilesException;
-import org.eyeseetea.malariacare.domain.usecase.TreatExternalAppResultUseCase;
-import org.eyeseetea.malariacare.domain.usecase.SendToExternalAppPaperVoucherUseCase;
+import org.eyeseetea.malariacare.domain.identifiers.CodeGenerator;
+import org.eyeseetea.malariacare.domain.identifiers.UIDGenerator;
+import org.eyeseetea.malariacare.domain.usecase.DownloadMediaUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetSettingsUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetUrlForWebViewsUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetUserUserAccountUseCase;
+import org.eyeseetea.malariacare.domain.usecase.SendToExternalAppPaperVoucherUseCase;
+import org.eyeseetea.malariacare.domain.usecase.TreatExternalAppResultUseCase;
 import org.eyeseetea.malariacare.domain.usecase.VerifyLanguagesAndConfigFilesWereDownloadedUseCase;
-import org.eyeseetea.malariacare.domain.usecase.DownloadMediaUseCase;
 import org.eyeseetea.malariacare.fragments.AVFragment;
 import org.eyeseetea.malariacare.fragments.DashboardUnsentFragment;
 import org.eyeseetea.malariacare.fragments.WebViewFragment;
@@ -80,7 +83,7 @@ import org.eyeseetea.malariacare.presentation.executors.UIThreadExecutor;
 import org.eyeseetea.malariacare.services.PushService;
 import org.eyeseetea.malariacare.services.strategies.PushServiceStrategy;
 import org.eyeseetea.malariacare.utils.Constants;
-import org.hisp.dhis.client.sdk.core.common.utils.CodeGenerator;
+import org.eyeseetea.malariacare.utils.Utils;
 
 import java.io.File;
 import java.util.Date;
@@ -109,7 +112,7 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
         ICredentialsRepository iCredentialsRepository = new CredentialsLocalDataSource();
 
-        Credentials credentials = iCredentialsRepository.getOrganisationCredentials();
+        Credentials credentials = iCredentialsRepository.getLastValidCredentials();
         if (credentials != null && !credentials.isDemoCredentials()) {
             IConfigurationRepository configurationRepository = new ConfigurationLocalDataSource();
             ILanguageRepository languageRepository = new LanguagesLocalDataSource();
@@ -151,8 +154,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
         IAsyncExecutor asyncExecutor = new AsyncExecutor();
         IMainExecutor mainExecutor = new UIThreadExecutor();
-        IConnectivityManager mConnectivity = new ConnectivityManager();
-        IProgramRepository programRepository = new ProgramLocalDataSource();
+        IConnectivityManager mConnectivity = new ConnectivityManager(mDashboardActivity);
+        IProgramRepository programRepository = new ProgramRepository();
         String path =
                 PreferencesState.getInstance().getContext().getFilesDir().getAbsolutePath() + "/"
                         + Constants.MEDIA_FOLDER;
@@ -168,7 +171,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     }
 
     private void showToast(@StringRes int text) {
-        Toast.makeText(mDashboardActivity.getApplicationContext(), text,
+        Toast.makeText(mDashboardActivity.getApplicationContext(),
+                Utils.getInternationalizedString(text, mDashboardActivity),
                 Toast.LENGTH_LONG).show();
     }
 
@@ -229,7 +233,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
                 if (userAccount.canAddSurveys()) {
                     openNewSurvey(activity);
                 } else {
-                    showToast(activity.getResources().getString(R.string.new_survey_disable));
+                    showToast(Utils.getInternationalizedString(R.string.new_survey_disable,
+                            activity));
                 }
             }
         });
@@ -522,8 +527,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
                     downloadMedia();
                 } else {
                     Toast.makeText(mDashboardActivity.getApplicationContext(),
-                            mDashboardActivity.getApplicationContext().getString(
-                                    R.string.google_play_required),
+                            Utils.getInternationalizedString(
+                                    R.string.google_play_required, mDashboardActivity),
                             Toast.LENGTH_LONG);
                 }
                 break;
@@ -573,7 +578,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
                     }
 
                     mDashboardActivity.showException(mDashboardActivity, "", String.format(
-                            mDashboardActivity.getResources().getString(R.string.give_voucher),
+                            Utils.getInternationalizedString(R.string.give_voucher,
+                                    mDashboardActivity),
                             voucherUId), onClickListener);
                 }
             });
@@ -592,7 +598,9 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
                         elementController, new IExternalVoucherRegistry.SenderCallback() {
                     @Override
                     public void onNotInstalledApp() {
-                        Toast.makeText(context, context.getString(R.string.element_not_installed), Toast.LENGTH_LONG).show();
+                        Toast.makeText(context,
+                                Utils.getInternationalizedString(R.string.element_not_installed,
+                                        context), Toast.LENGTH_LONG).show();
                     }
                 });
                 elementSentVoucherUseCase.execute(voucherUId);
@@ -602,12 +610,12 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     private boolean noIssueVoucher(SurveyDB survey) {
         OptionDB noIssueOption = survey.getOptionSelectedForQuestionCode(
-                mDashboardActivity.getString(R.string.issue_voucher_qc));
+                Utils.getInternationalizedString(R.string.issue_voucher_qc, mDashboardActivity));
         if (noIssueOption == null) {
             return false;
         }
         return noIssueOption.getName().equals(
-                mDashboardActivity.getString(R.string.no_voucher_on));
+                Utils.getInternationalizedString(R.string.no_voucher_on, mDashboardActivity));
     }
 
     private boolean hasPhone(SurveyDB survey) {

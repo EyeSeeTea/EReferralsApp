@@ -16,12 +16,12 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.eyeseetea.malariacare.DashboardActivity;
 import org.eyeseetea.malariacare.LoginActivity;
 import org.eyeseetea.malariacare.R;
-import org.eyeseetea.malariacare.data.authentication.AuthenticationManager;
 import org.eyeseetea.malariacare.data.database.CredentialsLocalDataSource;
 import org.eyeseetea.malariacare.data.database.InvalidLoginAttemptsRepositoryLocalDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.AuthDataSource;
@@ -30,16 +30,11 @@ import org.eyeseetea.malariacare.data.database.utils.PreferencesEReferral;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.Session;
 import org.eyeseetea.malariacare.data.database.utils.populatedb.PopulateDB;
-import org.eyeseetea.malariacare.data.repositories.OrganisationUnitRepository;
-import org.eyeseetea.malariacare.data.sync.importer.PullController;
-import org.eyeseetea.malariacare.domain.boundary.IAuthenticationManager;
-import org.eyeseetea.malariacare.domain.boundary.IPullController;
 import org.eyeseetea.malariacare.domain.boundary.executors.IAsyncExecutor;
 import org.eyeseetea.malariacare.domain.boundary.executors.IMainExecutor;
 import org.eyeseetea.malariacare.domain.boundary.repositories.IAuthRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.ICredentialsRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.IInvalidLoginAttemptsRepository;
-import org.eyeseetea.malariacare.domain.boundary.repositories.IOrganisationUnitRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.ISettingsRepository;
 import org.eyeseetea.malariacare.domain.entity.Credentials;
 import org.eyeseetea.malariacare.domain.entity.LoginType;
@@ -49,17 +44,18 @@ import org.eyeseetea.malariacare.domain.usecase.ALoginUseCase;
 import org.eyeseetea.malariacare.domain.usecase.CheckAuthUseCase;
 import org.eyeseetea.malariacare.domain.usecase.ForgotPasswordUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetLastInsertedCredentialsUseCase;
-import org.eyeseetea.malariacare.domain.usecase.GetMediaUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetSettingsUseCase;
 import org.eyeseetea.malariacare.domain.usecase.IsLoginEnableUseCase;
-import org.eyeseetea.malariacare.domain.usecase.LoginUseCase;
 import org.eyeseetea.malariacare.domain.usecase.LogoutUseCase;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullFilters;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullStep;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullUseCase;
+import org.eyeseetea.malariacare.factories.AuthenticationFactoryStrategy;
+import org.eyeseetea.malariacare.factories.SyncFactoryStrategy;
 import org.eyeseetea.malariacare.presentation.executors.AsyncExecutor;
 import org.eyeseetea.malariacare.presentation.executors.UIThreadExecutor;
 import org.eyeseetea.malariacare.receivers.AlarmPushReceiver;
+import org.eyeseetea.malariacare.utils.Utils;
 import org.eyeseetea.malariacare.views.question.CommonQuestionView;
 
 public class LoginActivityStrategy extends ALoginActivityStrategy {
@@ -74,7 +70,6 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
     private Button logoutButton;
     private Button demoButton;
     private Button advancedOptions;
-    IPullController pullController;
     IAsyncExecutor asyncExecutor;
     IMainExecutor mainExecutor;
     ICredentialsRepository credentialsRepository;
@@ -83,12 +78,11 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     public LoginActivityStrategy(LoginActivity loginActivity) {
         super(loginActivity);
-        pullController = new PullController(loginActivity);
         asyncExecutor = new AsyncExecutor();
         mainExecutor = new UIThreadExecutor();
         credentialsRepository = new CredentialsLocalDataSource();
         authRepository = new AuthDataSource(loginActivity.getApplicationContext());
-        mPullUseCase = new PullUseCase(pullController, asyncExecutor, mainExecutor);
+        mPullUseCase = new SyncFactoryStrategy().getPullUseCase(loginActivity.getApplicationContext());
         ISettingsRepository settingsDataSource = new SettingsDataSource(loginActivity);
         getSettingsUseCase= new GetSettingsUseCase(new UIThreadExecutor(), new AsyncExecutor(),
                 settingsDataSource);
@@ -165,7 +159,8 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
     }
 
     private void showToastAndClose(int error) {
-        Toast.makeText(loginActivity, error, Toast.LENGTH_LONG).show();
+        Toast.makeText(loginActivity, Utils.getInternationalizedString(error, loginActivity),
+                Toast.LENGTH_LONG).show();
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
@@ -216,7 +211,8 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
         passwordEditText.setTransformationMethod(PasswordTransformationMethod.getInstance());
         final TextInputLayout passwordHint =
                 (TextInputLayout) loginActivity.findViewById(R.id.password_hint);
-        passwordHint.setHint(loginActivity.getResources().getText(R.string.login_password));
+        passwordHint.setHint(
+                Utils.getInternationalizedString(R.string.login_password, loginActivity));
 
         initTextFields();
 
@@ -251,33 +247,36 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
                     @Override
                     public void onGetUsername(Credentials credentials) {
                         //Determine if it's a Soft or full login
+                        boolean comeFrom209= loginActivity.getIntent() != null && loginActivity.getIntent().getBooleanExtra(
+                                START_PULL, false);
                         if (credentials != null) {
                             loginType = LoginType.SOFT;
                             loginActivity.getUsernameEditText().setText(credentials.getUsername());
                             loginActivity.getUsernameEditText().setEnabled(false);
                             loginActivity.getUsernameEditText().setText(credentials.getUsername());
-                            CommonQuestionView.showKeyboard(loginActivity,
-                                    loginActivity.getPasswordEditText());
-                            loginActivity.getPasswordEditText().requestFocus();
+                            if(!comeFrom209){
+                                CommonQuestionView.showKeyboard(loginActivity,
+                                        loginActivity.getPasswordEditText());
+                                loginActivity.getPasswordEditText().requestFocus();
+                            }
                         } else {
                             loginType = LoginType.FULL;
                             loginActivity.getUsernameEditText().setEnabled(true);
                             loginActivity.getUsernameEditText().setText("");
 
                         }
-                        launchUpgradeMetadataIfComeFrom209();
+                        if(comeFrom209) {
+                            launchUpgradeMetadataIfComeFrom209();
+                        }
                     }
                 });
     }
 
 
     private void launchUpgradeMetadataIfComeFrom209() {
-        if (loginActivity.getIntent() != null && loginActivity.getIntent().getBooleanExtra(
-                START_PULL, false)) {
-            loginActivity.showProgressBar();
-            launchPull(false);
-            loginActivity.findViewById(R.id.progress_message).setVisibility(View.VISIBLE);
-        }
+        loginActivity.showProgressBar();
+        launchPull(false);
+        loginActivity.findViewById(R.id.progress_message).setVisibility(View.VISIBLE);
     }
 
     private void initLogoutButton() {
@@ -328,6 +327,8 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     private void initAdvancedOptionsButton() {
         advancedOptions = (Button) loginActivity.findViewById(R.id.advanced_options);
+        advancedOptions.setText(
+                Utils.getInternationalizedString(R.string.advanced_options, loginActivity));
 
         advancedOptions.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -351,6 +352,8 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     private void initServerURLField() {
         serverURLContainer = loginActivity.findViewById(R.id.text_layout_server_url);
+        ((TextInputLayout) loginActivity.findViewById(R.id.text_layout_server_url)).setHint(
+                Utils.getInternationalizedString(R.string.server_url, loginActivity));
     }
 
     private void initPasswordField() {
@@ -360,14 +363,15 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
         TextInputLayout passwordHint =
                 (TextInputLayout) loginActivity.findViewById(R.id.password_hint);
-        passwordHint.setHint(loginActivity.getResources().getText(R.string.login_password));
+        passwordHint.setHint(
+                Utils.getInternationalizedString(R.string.login_password, loginActivity));
     }
 
     private void onForgotPassword() {
         loginActivity.onStartLoading();
-        IAuthenticationManager authenticationManager = new AuthenticationManager(loginActivity);
-        ForgotPasswordUseCase forgotPasswordUseCase = new ForgotPasswordUseCase(mainExecutor,
-                asyncExecutor, authenticationManager);
+        ForgotPasswordUseCase forgotPasswordUseCase =
+                new AuthenticationFactoryStrategy().getForgotPasswordUseCase(loginActivity);
+
         forgotPasswordUseCase.execute(loginActivity.getUsernameEditText().getText().toString(),
                 new ForgotPasswordUseCase.Callback() {
                     @Override
@@ -379,15 +383,18 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
                     @Override
                     public void onNetworkError() {
                         loginActivity.onFinishLoading(null);
-                        showMessageDialog(loginActivity.getString(R.string.network_error),
-                                loginActivity.getString(R.string.error_conflict_title));
+                        showMessageDialog(Utils.getInternationalizedString(R.string.network_error,
+                                loginActivity),
+                                Utils.getInternationalizedString(R.string.error_conflict_title,
+                                        loginActivity));
                     }
 
                     @Override
                     public void onError(String messages) {
                         loginActivity.onFinishLoading(null);
                         showMessageDialog(messages,
-                                loginActivity.getString(R.string.error_conflict_title));
+                                Utils.getInternationalizedString(R.string.error_conflict_title,
+                                        loginActivity));
                     }
                 });
 
@@ -396,8 +403,8 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     @Override
     public void onLoginSuccess(final Credentials credentials) {
-        loginActivity.checkAnnouncement();
         PreferencesEReferral.setLastLoginType(loginType);
+        finishAndGo();
     }
 
     @Override
@@ -472,21 +479,15 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
         }
     }
 
-    public void initLoginUseCase(IAuthenticationManager authenticationManager) {
-        ICredentialsRepository credentialsLocalDataSoruce = new CredentialsLocalDataSource();
-        IOrganisationUnitRepository organisationDataSource = new OrganisationUnitRepository();
-        IInvalidLoginAttemptsRepository
-                iInvalidLoginAttemptsRepository =
-                new InvalidLoginAttemptsRepositoryLocalDataSource();
-        loginActivity.mLoginUseCase = new LoginUseCase(authenticationManager, mainExecutor,
-                asyncExecutor, organisationDataSource, credentialsLocalDataSoruce,
-                iInvalidLoginAttemptsRepository);
+    public void initLoginUseCase() {
+        loginActivity.mLoginUseCase = new AuthenticationFactoryStrategy()
+                .getLoginUseCase(loginActivity);
     }
 
     @Override
     public void checkCredentials(Credentials credentials, final Callback callback) {
         ICredentialsRepository credentialsLocalDataSource = new CredentialsLocalDataSource();
-        Credentials savedCredentials = credentialsLocalDataSource.getOrganisationCredentials();
+        Credentials savedCredentials = credentialsLocalDataSource.getLastValidCredentials();
         if (savedCredentials == null || savedCredentials.isEmpty()
                 || savedCredentials.getUsername().equals(
                 credentials.getUsername()) && (!savedCredentials.getPassword().equals(
@@ -559,7 +560,8 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
             public void onWarning(WarningException warning) {
                 Log.w(this.getClass().getSimpleName(), "onWarning " + warning.getMessage());
                 loginActivity.showError(
-                        loginActivity.getString(R.string.warning_message) + warning.getMessage());
+                        Utils.getInternationalizedString(R.string.warning_message, loginActivity)
+                                + warning.getMessage());
             }
 
             @Override
@@ -579,7 +581,9 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
         AlertDialog.Builder builder = new AlertDialog.Builder(loginActivity);
         builder.setTitle(title);
         builder.setMessage(message);
-        builder.setPositiveButton(R.string.provider_redeemEntry_msg_matchingOk,
+        builder.setPositiveButton(
+                Utils.getInternationalizedString(R.string.provider_redeemEntry_msg_matchingOk,
+                        loginActivity),
                 new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
@@ -591,6 +595,7 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     private void initDemoButton() {
         demoButton = (Button) loginActivity.findViewById(R.id.demo_login_button);
+        demoButton.setText(Utils.getInternationalizedString(R.string.demo_login, loginActivity));
 
         demoButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -650,8 +655,8 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
     }
 
     private void executePullDemo() {
-        PullController pullController = new PullController(loginActivity);
-        PullUseCase pullUseCase = new PullUseCase(pullController, asyncExecutor, mainExecutor);
+        PullUseCase pullUseCase =
+                new SyncFactoryStrategy().getPullUseCase(loginActivity.getApplicationContext());
 
         PullFilters pullFilters = new PullFilters();
         pullFilters.setDemo(true);
@@ -700,12 +705,10 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
     }
 
     private void logout(final LogoutUseCase.Callback callback) {
-        IAuthenticationManager iAuthenticationManager = new AuthenticationManager(
-                loginActivity);
-
         AlarmPushReceiver.cancelPushAlarm(loginActivity);
 
-        LogoutUseCase logoutUseCase = new LogoutUseCase(iAuthenticationManager);
+        LogoutUseCase logoutUseCase = new AuthenticationFactoryStrategy()
+                .getLogoutUseCase(loginActivity);
 
         logoutUseCase.execute(callback);
     }

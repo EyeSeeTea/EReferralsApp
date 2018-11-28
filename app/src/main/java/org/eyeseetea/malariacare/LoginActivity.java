@@ -30,6 +30,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
+import android.support.design.widget.TextInputLayout;
 import android.support.v4.content.ContextCompat;
 import android.text.Editable;
 import android.text.Html;
@@ -53,10 +54,8 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.eyeseetea.malariacare.data.authentication.AuthenticationManager;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.data.database.utils.Session;
-import org.eyeseetea.malariacare.domain.boundary.IAuthenticationManager;
 import org.eyeseetea.malariacare.domain.entity.Credentials;
 import org.eyeseetea.malariacare.domain.exception.ApiCallException;
 import org.eyeseetea.malariacare.domain.usecase.ALoginUseCase;
@@ -66,8 +65,8 @@ import org.eyeseetea.malariacare.strategies.ALoginActivityStrategy;
 import org.eyeseetea.malariacare.strategies.LoginActivityStrategy;
 import org.eyeseetea.malariacare.utils.LanguageContextWrapper;
 import org.eyeseetea.malariacare.utils.Utils;
+import org.eyeseetea.malariacare.views.AbsTextWatcher;
 import org.eyeseetea.malariacare.views.dialog.AnnouncementMessageDialog;
-import org.hisp.dhis.client.sdk.ui.views.AbsTextWatcher;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -86,7 +85,6 @@ public class LoginActivity extends Activity {
     public static final String DEFAULT_PASSWORD = "";
     private static final String TAG = ".LoginActivity";
     private static final String IS_LOADING = "state:isLoading";
-    public IAuthenticationManager mAuthenticationManager = new AuthenticationManager(this);
     public LoginUseCase mLoginUseCase;
     public LoginActivityStrategy mLoginActivityStrategy;
     EditText serverText;
@@ -106,11 +104,13 @@ public class LoginActivity extends Activity {
     // Callback which will be triggered when animations are finished
     private OnPostAnimationListener onPostAnimationListener;
 
+    private Context mContext;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.d(TAG, "onCreate");
+        Log.d(TAG, "AndroidLifeCycle: onCreate");
         setContentView(R.layout.activity_login);
         PreferencesState.getInstance().onCreateActivityPreferences(getResources(), getTheme());
         initLoginUseCase();
@@ -119,11 +119,12 @@ public class LoginActivity extends Activity {
         if(BuildConfig.translations) {
             PreferencesState.getInstance().loadsLanguageInActivity();
         }
+        mContext = this;
     }
 
     private void initLoginUseCase() {
         mLoginActivityStrategy = new LoginActivityStrategy(this);
-        mLoginActivityStrategy.initLoginUseCase(mAuthenticationManager);
+        mLoginActivityStrategy.initLoginUseCase();
     }
 
     private void initDataDownloadPeriodDropdown() {
@@ -183,10 +184,10 @@ public class LoginActivity extends Activity {
 
     protected void onLoginButtonClicked(Editable server, Editable username, Editable password) {
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        if (!sharedPreferences.getBoolean(getString(R.string.eula_accepted), false)) {
-            askEula(R.string.app_EULA, R.raw.eula, LoginActivity.this);
-        } else {
+        if (sharedPreferences.getBoolean(getString(R.string.eula_accepted), false) || !BuildConfig.askEula) {
             login(server.toString(), username.toString(), password.toString());
+        } else {
+            askEula(R.string.app_EULA, R.raw.eula, LoginActivity.this);
         }
     }
 
@@ -247,7 +248,8 @@ public class LoginActivity extends Activity {
         return super.onOptionsItemSelected(item);
     }
     public void showError(int message) {
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        Toast.makeText(this, Utils.getInternationalizedString(message, this),
+                Toast.LENGTH_LONG).show();
     }
 
     @Override
@@ -266,6 +268,9 @@ public class LoginActivity extends Activity {
         //Username, Password blanks to force real login
         usernameEditText = (EditText) findViewById(R.id.edittext_username);
         usernameEditText.setText(DEFAULT_USER);
+        TextInputLayout userHint = (TextInputLayout) findViewById(R.id.username_hint);
+        userHint.setHint(
+                Utils.getInternationalizedString(R.string.login_userName, mContext));
         usernameEditText.addTextChangedListener(watcher);
         passwordEditText = (EditText) findViewById(R.id.edittext_password);
         passwordEditText.setText(DEFAULT_PASSWORD);
@@ -280,6 +285,7 @@ public class LoginActivity extends Activity {
                         passwordEditText.getText());
             }
         });
+        loginButton.setText(Utils.getInternationalizedString(R.string.login_btn_login, mContext));
 
         mLoginActivityStrategy.initViews();
     }
@@ -301,7 +307,8 @@ public class LoginActivity extends Activity {
             @Override
             public void onError() {
                 hideProgressBar();
-                showError(getString(R.string.login_unexpected_error));
+                showError(Utils.getInternationalizedString(R.string.login_unexpected_error,
+                        mContext));
             }
         });
 
@@ -320,8 +327,11 @@ public class LoginActivity extends Activity {
             public void onServerURLNotValid() {
                 Log.d(TAG, "onServerURLNotValid");
                 onFinishLoading(null);
-                serverText.setError(getString(R.string.login_invalid_server_url));
-                showError(getString(R.string.login_invalid_server_url));
+                serverText.setError(
+                        Utils.getInternationalizedString(R.string.login_invalid_server_url,
+                                mContext));
+                showError(Utils.getInternationalizedString(R.string.login_invalid_server_url,
+                        mContext));
             }
 
             @Override
@@ -346,14 +356,15 @@ public class LoginActivity extends Activity {
             public void onConfigJsonInvalid() {
                 Log.d(TAG, "onConfigJsonInvalid");
                 onFinishLoading(null);
-                showError(getString(R.string.login_error_json));
+                showError(Utils.getInternationalizedString(R.string.login_error_json, mContext));
             }
 
             @Override
             public void onUnexpectedError() {
                 Log.d(TAG, "onUnexpectedError");
                 hideProgressBar();
-                showError(getString(R.string.login_unexpected_error));
+                showError(Utils.getInternationalizedString(R.string.login_unexpected_error,
+                        mContext));
             }
 
             @Override
@@ -383,14 +394,12 @@ public class LoginActivity extends Activity {
             layoutTransition.enableTransitionType(LayoutTransition.CHANGING);
             layoutTransition.addTransitionListener(onPostAnimationListener);
 
-            RelativeLayout loginLayoutContent = (RelativeLayout) findViewById(
-                    org.hisp.dhis.client.sdk.ui.R.id.layout_content);
+            RelativeLayout loginLayoutContent = (RelativeLayout) findViewById(R.id.layout_content);
+
             loginLayoutContent.setLayoutTransition(layoutTransition);
         } else {
-            layoutTransitionSlideIn = AnimationUtils.loadAnimation(this,
-                    org.hisp.dhis.client.sdk.ui.R.anim.in_up);
-            layoutTransitionSlideOut = AnimationUtils.loadAnimation(this,
-                    org.hisp.dhis.client.sdk.ui.R.anim.out_down);
+            layoutTransitionSlideIn = AnimationUtils.loadAnimation(this, R.anim.in_up);
+            layoutTransitionSlideOut = AnimationUtils.loadAnimation(this, R.anim.out_down);
 
             layoutTransitionSlideIn.setAnimationListener(onPostAnimationListener);
             layoutTransitionSlideOut.setAnimationListener(onPostAnimationListener);
@@ -440,6 +449,7 @@ public class LoginActivity extends Activity {
 
     @Override
     protected void onStart() {
+        Log.d(TAG, "AndroidLifeCycle: onStart");
         super.onStart();
         mLoginActivityStrategy.onStart();
     }
@@ -506,6 +516,7 @@ public class LoginActivity extends Activity {
 
     @Override
     protected void onPause() {
+        Log.d(TAG, "AndroidLifeCycle: onPause");
         if (onPostAnimationAction != null) {
             onPostAnimationAction.run();
             onPostAnimationAction = null;
@@ -692,6 +703,30 @@ public class LoginActivity extends Activity {
         String currentLanguage = PreferencesState.getInstance().getCurrentLocale();
         Context context = LanguageContextWrapper.wrap(newBase, currentLanguage);
         super.attachBaseContext(context);
+    }
+
+    @Override
+    protected void onStop() {
+        Log.d(TAG, "AndroidLifeCycle: onStop");
+        super.onStop();
+    }
+
+    @Override
+    protected void onResume() {
+        Log.d(TAG, "AndroidLifeCycle: onResume");
+        super.onResume();
+    }
+
+    @Override
+    protected void onRestart() {
+        super.onRestart();
+        Log.d(TAG, "AndroidLifeCycle: onRestart");
+    }
+
+    @Override
+    protected void onDestroy() {
+        Log.d(TAG, "AndroidLifeCycle: onDestroy");
+        super.onDestroy();
     }
 }
 
