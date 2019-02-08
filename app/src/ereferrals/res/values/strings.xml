@@ -866,6 +866,7 @@
 <string name="dynamic_error_number">"Invalid number"</string>
 <string name="date_format_forward_slash">"yyyy/mm/dd"</string>
 <string name="network_error">"There is a problem with the network, please try again later."</string>
+<string name="not_available">"The server is not available."</string>
 <string name="login_invalid_credentials">"Invalid credentials"</string>
 <string name="login_unexpected_error">"An error has occurred, please try again later"</string>
 <string name="login_invalid_server_url">"Invalid Server URL"</string>
@@ -914,7 +915,7 @@
 <string name="common_option_method_depo">"Depo"</string>
 <string name="common_option_eventType_HHV">"Household Visit"</string>
 <string name="common_option_eventType_BHA">"Bhalakusari"</string>
-<string name="common_option_eventType_MME">"Mid Media Events"</string>
+<string name="common_option_eventType_MME">"Mass Media Events"</string>
 <string name="common_option_heardAbout_HHV">"Household Visit"</string>
 <string name="common_option_heardAbout_BHA">"Bhalakusari"</string>
 <string name="common_option_heardAbout_PROV">"Provider"</string>
@@ -1126,6 +1127,7 @@
 <string name="element_not_installed">"Element SDK is not installed!"</string>
 <string name="check_metadata_title">"Check metadata updates on soft logins"</string>
 <string name="settings_title_program_url_config">"Program configuration URL"</string>
+<string name="settings_title_program_endpoint_config">"Program configuration Endpoint"</string>
 <string name="settings_title_program_username_config">"Program configuration username"</string>
 <string name="settings_title_program_password_config">"Program configuration password"</string>
 <string name="action_bar_connect">Connect</string>
@@ -1135,4 +1137,21 @@
 <string name="zimbabwe_program_eref">Zimbabwe</string>
 <string name="demo_page_text">"You're in demo mode and this is an online module. Please logout and login with a valid user to see this information."</string>
 <string name="erro_page_text">"You're offline and this is an online module. Please connect to a network in order to see this information."</string>
+<string name="production">Production</string>
+<string name="training">Training</string>
+<string name="custom">Custom</string>
+
+
+    <string name="splash_progress_init_db">Initializing database …</string>
+    <string name="splash_progress_downloading_languages">Download current language terms …</string>
+    <string name="splash_progress_executing_maintenance_task">Executing maintenance task …</string>
+
+
+
+    <string name="pull_dialog_progress_generic_message">Updating metadata …</string>
+    <string name="push_invalid_credentials">we have detected that the pin has changed on the server, please insert the pin again</string>
+
+
+    <string name="web_view_network_error">There were network problems while loading the web page</string>
+    <string name="push_network_error">There were network problems while sending vouchers to the server</string>
 </resources>

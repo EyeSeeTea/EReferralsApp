@@ -1,41 +1,33 @@
 package org.eyeseetea.malariacare.services.strategies;
 
+import android.content.Context;
 import android.content.Intent;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
-import org.eyeseetea.malariacare.BuildConfig;
 import org.eyeseetea.malariacare.EyeSeeTeaApplication;
 import org.eyeseetea.malariacare.LoginActivity;
 import org.eyeseetea.malariacare.R;
-import org.eyeseetea.malariacare.data.database.datasources.SurveyLocalDataSource;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
-import org.eyeseetea.malariacare.data.repositories.OrganisationUnitRepository;
 import org.eyeseetea.malariacare.data.repositories.ProgramRepository;
-import org.eyeseetea.malariacare.data.sync.exporter.WSPushController;
-import org.eyeseetea.malariacare.domain.boundary.IPushController;
-import org.eyeseetea.malariacare.domain.boundary.executors.IAsyncExecutor;
-import org.eyeseetea.malariacare.domain.boundary.executors.IMainExecutor;
 import org.eyeseetea.malariacare.domain.boundary.repositories.ICredentialsRepository;
-import org.eyeseetea.malariacare.domain.boundary.repositories.IOrganisationUnitRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.IProgramRepository;
-import org.eyeseetea.malariacare.domain.boundary.repositories.ISurveyRepository;
+import org.eyeseetea.malariacare.domain.entity.AppInfo;
 import org.eyeseetea.malariacare.domain.entity.Credentials;
 import org.eyeseetea.malariacare.domain.exception.ApiCallException;
 import org.eyeseetea.malariacare.domain.exception.ConfigFileObsoleteException;
-import org.eyeseetea.malariacare.domain.usecase.ALoginUseCase;
-import org.eyeseetea.malariacare.domain.usecase.LoginUseCase;
+import org.eyeseetea.malariacare.domain.usecase.GetAppInfoUseCase;
 import org.eyeseetea.malariacare.domain.usecase.LogoutUseCase;
+import org.eyeseetea.malariacare.domain.usecase.SaveAppInfoUseCase;
 import org.eyeseetea.malariacare.domain.usecase.push.MockedPushSurveysUseCase;
 import org.eyeseetea.malariacare.domain.usecase.push.PushUseCase;
-import org.eyeseetea.malariacare.domain.usecase.push.SurveysThresholds;
+import org.eyeseetea.malariacare.factories.AppInfoFactory;
 import org.eyeseetea.malariacare.factories.AuthenticationFactoryStrategy;
 import org.eyeseetea.malariacare.factories.SyncFactoryStrategy;
-import org.eyeseetea.malariacare.presentation.executors.AsyncExecutor;
-import org.eyeseetea.malariacare.presentation.executors.UIThreadExecutor;
-import org.eyeseetea.malariacare.receivers.AlarmPushReceiver;
 import org.eyeseetea.malariacare.services.PushService;
 import org.eyeseetea.malariacare.utils.Permissions;
+
+import java.util.Date;
 
 public class PushServiceStrategy extends APushServiceStrategy {
 
@@ -43,7 +35,9 @@ public class PushServiceStrategy extends APushServiceStrategy {
     public static final String SERVICE_METHOD = "serviceMethod";
     public static final String PUSH_MESSAGE = "PushStart";
     public static final String PUSH_IS_START = "PushIsStart";
-    public static final String SHOW_LOGIN = "ShowLogin";
+    public static final String PULL_REQUIRED = "PullRequired";
+    public static final String INVALID_CREDENTIALS_ON_PUSH = "InvalidCredentialsOnPush";
+    public static final String PUSH_NETWORK_ERROR = "PushNetworkError";
 
     private PushUseCase mPushUseCase;
 
@@ -65,62 +59,12 @@ public class PushServiceStrategy extends APushServiceStrategy {
         Credentials credentials = credentialsRepository.getCredentials();
 
         if (credentials != null) {
-            if (credentials.isDemoCredentials()) {
-                PushServiceStrategy.this.onCorrectCredentials();
+            if (PreferencesState.getCredentialsFromPreferences().isDemoCredentials()) {
+                executeMockedPush();
             } else {
-                LoginUseCase loginUseCase = new AuthenticationFactoryStrategy()
-                        .getLoginUseCase(mPushService);
-
-                final Credentials oldCredentials =
-                        credentialsRepository.getLastValidCredentials();
-
-                loginUseCase.execute(oldCredentials, new ALoginUseCase.Callback() {
-                    @Override
-                    public void onLoginSuccess() {
-                        Log.e(TAG, "onLoginSuccess");
-                        PushServiceStrategy.this.onCorrectCredentials();
-                    }
-
-                    @Override
-                    public void onServerURLNotValid() {
-                        Log.e(TAG, "Error getting user credentials: URL not valid ");
-                    }
-
-                    @Override
-                    public void onServerPinChanged() {
-                        Log.e(TAG, "Error onServerPinChanged");
-                        AlarmPushReceiver.cancelPushAlarm(mPushService);
-                        moveToLoginActivity();
-                    }
-
-                    @Override
-                    public void onInvalidCredentials() {
-                        Log.e(TAG, "Error credentials not valid.");
-                        AlarmPushReceiver.cancelPushAlarm(mPushService);
-                        logout();
-                    }
-
-                    @Override
-                    public void onNetworkError() {
-                        Log.e(TAG, "Error getting user credentials: NetworkError");
-                    }
-
-                    @Override
-                    public void onConfigJsonInvalid() {
-                        Log.e(TAG, "Error getting user credentials: JsonInvalid");
-                    }
-
-                    @Override
-                    public void onUnexpectedError() {
-                        Log.e(TAG, "Error getting user credentials: unexpectedError ");
-                    }
-
-                    @Override
-                    public void onMaxLoginAttemptsReachedError() {
-                        Log.e(TAG, "onMaxLoginAttemptsReachedError");
-                    }
-                });
+                executePush();
             }
+            updateAppInfo(mPushService);
         } else {
             Log.w(TAG, "Push cancelled because does not exist user credentials, possible logout");
         }
@@ -131,22 +75,32 @@ public class PushServiceStrategy extends APushServiceStrategy {
         IProgramRepository programRepository = new ProgramRepository();
         MockedPushSurveysUseCase mockedPushSurveysUseCase = new MockedPushSurveysUseCase(
                 programRepository);
-
+        sendIntentStartEndPush(true);
         mockedPushSurveysUseCase.execute(new MockedPushSurveysUseCase.Callback() {
             @Override
             public void onPushFinished() {
                 Log.d(TAG, "onPushMockFinished");
+                sendIntentStartEndPush(false);
                 mPushService.onPushFinished();
             }
         });
     }
 
-    private void onCorrectCredentials() {
-        if (PreferencesState.getCredentialsFromPreferences().isDemoCredentials()) {
-            executeMockedPush();
-        } else {
-            executePush();
-        }
+    private void updateAppInfo(final Context context) {
+        final AppInfoFactory appInfoFactory = new AppInfoFactory();
+        appInfoFactory.getGetAppInfoUseCase(context).execute(new GetAppInfoUseCase.Callback() {
+            @Override
+            public void onAppInfoLoaded(AppInfo appInfo) {
+                SaveAppInfoUseCase saveAppInfoUseCase = appInfoFactory.getSaveAppInfoUseCase(
+                        context);
+                saveAppInfoUseCase.excute(new SaveAppInfoUseCase.Callback() {
+                    @Override
+                    public void onAppInfoSaved() {
+                    }
+                }, new AppInfo(appInfo.getMetadataVersion(), appInfo.getConfigFileVersion(),
+                        appInfo.getAppVersion(), appInfo.getUpdateMetadataDate(), new Date()));
+            }
+        });
     }
 
 
@@ -235,6 +189,7 @@ public class PushServiceStrategy extends APushServiceStrategy {
 
             @Override
             public void onNetworkError() {
+                sendIntentNetwokError();
                 onError("PUSHUSECASE ERROR Network not available");
             }
 
@@ -277,6 +232,11 @@ public class PushServiceStrategy extends APushServiceStrategy {
             }
 
             @Override
+            public void onInvalidCredentials() {
+                sendInvalidcredentialsOnPush();
+            }
+
+            @Override
             public void onClosedUser() {
                 onError("PUSHUSECASE ERROR on closedUser "
                         + PreferencesState.getInstance().isPushInProgress());
@@ -305,16 +265,32 @@ public class PushServiceStrategy extends APushServiceStrategy {
                 PreferencesState.getInstance().getContext()).sendBroadcast(surveysIntent);
     }
 
+    private void sendIntentNetwokError() {
+        Intent surveysIntent = new Intent(PushService.class.getName());
+        surveysIntent.putExtra(SERVICE_METHOD, PUSH_MESSAGE);
+        surveysIntent.putExtra(PUSH_NETWORK_ERROR, true);
+        LocalBroadcastManager.getInstance(
+                PreferencesState.getInstance().getContext()).sendBroadcast(surveysIntent);
+    }
+
     private void handleAPIException(Exception e) {
         if (e instanceof ConfigFileObsoleteException) {
-            sendIntentShowLogin();
+            sendPullRequired();
         }
     }
 
-    private void sendIntentShowLogin() {
+    private void sendPullRequired() {
         Intent surveysIntent = new Intent(PushService.class.getName());
         surveysIntent.putExtra(SERVICE_METHOD, PUSH_MESSAGE);
-        surveysIntent.putExtra(SHOW_LOGIN, true);
+        surveysIntent.putExtra(PULL_REQUIRED, true);
+        LocalBroadcastManager.getInstance(
+                PreferencesState.getInstance().getContext()).sendBroadcast(surveysIntent);
+    }
+
+    private void sendInvalidcredentialsOnPush() {
+        Intent surveysIntent = new Intent(PushService.class.getName());
+        surveysIntent.putExtra(SERVICE_METHOD, PUSH_MESSAGE);
+        surveysIntent.putExtra(INVALID_CREDENTIALS_ON_PUSH, true);
         LocalBroadcastManager.getInstance(
                 PreferencesState.getInstance().getContext()).sendBroadcast(surveysIntent);
     }

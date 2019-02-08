@@ -7,6 +7,7 @@ import android.app.Activity;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Handler;
+import android.support.annotation.StringRes;
 import android.support.design.widget.TextInputLayout;
 import android.support.v7.app.AlertDialog;
 import android.text.InputType;
@@ -14,9 +15,11 @@ import android.text.method.PasswordTransformationMethod;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import org.eyeseetea.malariacare.DashboardActivity;
@@ -26,9 +29,7 @@ import org.eyeseetea.malariacare.data.database.CredentialsLocalDataSource;
 import org.eyeseetea.malariacare.data.database.InvalidLoginAttemptsRepositoryLocalDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.AuthDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.SettingsDataSource;
-import org.eyeseetea.malariacare.data.database.utils.PreferencesEReferral;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
-import org.eyeseetea.malariacare.data.database.utils.Session;
 import org.eyeseetea.malariacare.data.database.utils.populatedb.PopulateDB;
 import org.eyeseetea.malariacare.domain.boundary.executors.IAsyncExecutor;
 import org.eyeseetea.malariacare.domain.boundary.executors.IMainExecutor;
@@ -37,16 +38,16 @@ import org.eyeseetea.malariacare.domain.boundary.repositories.ICredentialsReposi
 import org.eyeseetea.malariacare.domain.boundary.repositories.IInvalidLoginAttemptsRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.ISettingsRepository;
 import org.eyeseetea.malariacare.domain.entity.Credentials;
-import org.eyeseetea.malariacare.domain.entity.LoginType;
 import org.eyeseetea.malariacare.domain.entity.Settings;
+import org.eyeseetea.malariacare.domain.exception.InvalidMetadataException;
 import org.eyeseetea.malariacare.domain.exception.WarningException;
 import org.eyeseetea.malariacare.domain.usecase.ALoginUseCase;
 import org.eyeseetea.malariacare.domain.usecase.CheckAuthUseCase;
 import org.eyeseetea.malariacare.domain.usecase.ForgotPasswordUseCase;
-import org.eyeseetea.malariacare.domain.usecase.GetLastInsertedCredentialsUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetSettingsUseCase;
 import org.eyeseetea.malariacare.domain.usecase.IsLoginEnableUseCase;
 import org.eyeseetea.malariacare.domain.usecase.LogoutUseCase;
+import org.eyeseetea.malariacare.domain.usecase.SaveSettingsUseCase;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullFilters;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullStep;
 import org.eyeseetea.malariacare.domain.usecase.pull.PullUseCase;
@@ -55,26 +56,32 @@ import org.eyeseetea.malariacare.factories.SyncFactoryStrategy;
 import org.eyeseetea.malariacare.presentation.executors.AsyncExecutor;
 import org.eyeseetea.malariacare.presentation.executors.UIThreadExecutor;
 import org.eyeseetea.malariacare.receivers.AlarmPushReceiver;
-import org.eyeseetea.malariacare.utils.Utils;
-import org.eyeseetea.malariacare.views.question.CommonQuestionView;
 
 public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     private static final java.lang.String TAG = ".LoginActivityStrategy";
     public static final java.lang.String EXIT = "exit";
-    public static final String START_PULL = "StartPull";
     private final PullUseCase mPullUseCase;
     private IsLoginEnableUseCase mIsLoginEnableUseCase;
-    private View serverURLContainer;
-    private LoginType loginType;
+    private View webserviceURLContainer;
+    private View programURLContainer;
+    private View programEndpointContainer;
+    private View webviewURLContainer;
+    private EditText programURLEditText;
+    private EditText programEndPointEditText;
+    private EditText webviewURLEditText;
+    private Spinner serverSpinner;
     private Button logoutButton;
     private Button demoButton;
     private Button advancedOptions;
+    private Settings settings;
     IAsyncExecutor asyncExecutor;
     IMainExecutor mainExecutor;
     ICredentialsRepository credentialsRepository;
     IAuthRepository authRepository;
     GetSettingsUseCase getSettingsUseCase;
+    SaveSettingsUseCase saveSettingsUseCase;
+
 
     public LoginActivityStrategy(LoginActivity loginActivity) {
         super(loginActivity);
@@ -82,9 +89,12 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
         mainExecutor = new UIThreadExecutor();
         credentialsRepository = new CredentialsLocalDataSource();
         authRepository = new AuthDataSource(loginActivity.getApplicationContext());
-        mPullUseCase = new SyncFactoryStrategy().getPullUseCase(loginActivity.getApplicationContext());
+        mPullUseCase = new SyncFactoryStrategy().getPullUseCase(
+                loginActivity.getApplicationContext());
         ISettingsRepository settingsDataSource = new SettingsDataSource(loginActivity);
-        getSettingsUseCase= new GetSettingsUseCase(new UIThreadExecutor(), new AsyncExecutor(),
+        getSettingsUseCase = new GetSettingsUseCase(new UIThreadExecutor(), new AsyncExecutor(),
+                settingsDataSource);
+        saveSettingsUseCase = new SaveSettingsUseCase(new UIThreadExecutor(), new AsyncExecutor(),
                 settingsDataSource);
     }
 
@@ -105,22 +115,7 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
         if (loginActivity.getIntent().getBooleanExtra(EXIT, false)) {
             loginActivity.finish();
         }
-        showDashboardIfDemoUser();
         runConnectVoucherFromOtherApp();
-    }
-
-    private void showDashboardIfDemoUser() {
-        GetLastInsertedCredentialsUseCase getLastInsertedCredentialsUseCase =
-                new GetLastInsertedCredentialsUseCase(mainExecutor, asyncExecutor,
-                        credentialsRepository);
-        getLastInsertedCredentialsUseCase.execute(new GetLastInsertedCredentialsUseCase.Callback() {
-            @Override
-            public void onGetUsername(Credentials credentials) {
-                if (credentials != null && credentials.isDemoCredentials()) {
-                    finishAndGo(DashboardActivity.class);
-                }
-            }
-        });
     }
 
     private void runConnectVoucherFromOtherApp() {
@@ -137,29 +132,26 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
             @Override
             public void onEmptyAuth() {
+                //TODO: this scenario is not possible in full login, only on soft login
                 Log.d(TAG, "Survey from other app with empty auth");
-                Session.setHasSurveyToComplete(true);
             }
 
             @Override
             public void onValidAuth() {
+                //TODO: this scenario is not possible in full login, only on soft login
                 Log.d(TAG, "Survey from other app with valid auth");
-                Session.setHasSurveyToComplete(true);
-                finishAndGo(DashboardActivity.class);
-
             }
 
             @Override
             public void onInValidAuth() {
+                //TODO: this scenario is not possible in full login, only on soft login
                 Log.d(TAG, "Survey from other app with invalid auth");
-                showToastAndClose(R.string.different_user_error);
-
             }
         });
     }
 
     private void showToastAndClose(int error) {
-        Toast.makeText(loginActivity, Utils.getInternationalizedString(error, loginActivity),
+        Toast.makeText(loginActivity, translate(error),
                 Toast.LENGTH_LONG).show();
         Runnable runnable = new Runnable() {
             @Override
@@ -178,26 +170,7 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     @Override
     public void finishAndGo() {
-        if(loginType==LoginType.FULL){
-            launchPull(false);
-            return;
-        }else {
-            getSettingsUseCase.execute(new GetSettingsUseCase.Callback() {
-                @Override
-                public void onSuccess(Settings setting) {
-                    if (setting.isMetadataUpdateActive()) {
-                        asyncExecutor.run(new Runnable() {
-                            @Override
-                            public void run() {
-                                launchPull(false);
-                            }
-                        });
-                    } else {
-                        goToDashboard();
-                    }
-                }
-            });
-        }
+        launchPull(false);
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
@@ -209,16 +182,66 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
         EditText passwordEditText = (EditText) loginActivity.findViewById(R.id.edittext_password);
         passwordEditText.setInputType(InputType.TYPE_CLASS_NUMBER);
         passwordEditText.setTransformationMethod(PasswordTransformationMethod.getInstance());
-        final TextInputLayout passwordHint =
-                (TextInputLayout) loginActivity.findViewById(R.id.password_hint);
-        passwordHint.setHint(
-                Utils.getInternationalizedString(R.string.login_password, loginActivity));
 
         initTextFields();
 
         initButtons();
 
-        setUpSoftOrFullLoginOptions();
+        initSpinner();
+    }
+
+    private void initSpinner() {
+        serverSpinner = (Spinner) loginActivity.findViewById(R.id.server_spinner);
+        String[] serverList = loginActivity.getResources().getStringArray(R.array.server_list);
+        if (serverList.length < 1) {
+            return;
+        }
+        ArrayAdapter serversListAdapter = new ArrayAdapter<>(loginActivity.getBaseContext(),
+                android.R.layout.simple_spinner_item, serverList);
+        serverSpinner.setAdapter(serversListAdapter);
+        serverSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String value = parent.getItemAtPosition(position).toString();
+                if (value.equals(
+                        parent.getContext().getResources().getString(R.string.production))) {
+                    setConfiguration(R.string.program_url_production,
+                            R.string.program_endpoint_production, R.string.web_url_production,
+                            R.string.webservice_url_production, false);
+                } else if (value.equals(
+                        parent.getContext().getResources().getString(R.string.training))) {
+                    setConfiguration(R.string.program_url_training,
+                            R.string.program_endpoint_training, R.string.web_url_training,
+                            R.string.webservice_url_training, false);
+                } else if (value.equals(
+                        parent.getContext().getResources().getString(R.string.custom))) {
+                    setConfiguration(R.string.program_url_production,
+                            R.string.program_endpoint_production, R.string.web_url_production,
+                            R.string.webservice_url_production, true);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                parent.setSelection(0);
+            }
+        });
+    }
+
+    private void setConfiguration(int programUrlStringId, int programEndpointStringId,
+            int webUrlStringId, int webserviceUrlStringId, boolean visibility) {
+        showServerEditUrls(visibility);
+        programURLEditText.setText(programUrlStringId);
+        programEndPointEditText.setText(programEndpointStringId);
+        webviewURLEditText.setText(webUrlStringId);
+        loginActivity.getServerText().setText(webserviceUrlStringId);
+    }
+
+    private void showServerEditUrls(boolean value) {
+        changeVisibility(webserviceURLContainer, value);
+        changeVisibility(programEndpointContainer, value);
+        changeVisibility(programURLContainer, value);
+        changeVisibility(webviewURLContainer, value);
     }
 
     private void initButtons() {
@@ -232,51 +255,11 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
     }
 
     private void initTextFields() {
-        initServerURLField();
-
+        initWebServiceURLField();
+        initProgramURLField();
+        initProgramEndpointField();
+        initWebURLField();
         initPasswordField();
-    }
-
-    private void setUpSoftOrFullLoginOptions() {
-        GetLastInsertedCredentialsUseCase getLastInsertedCredentialsUseCase =
-                new GetLastInsertedCredentialsUseCase(mainExecutor, asyncExecutor,
-                        credentialsRepository);
-
-        getLastInsertedCredentialsUseCase.execute(
-                new GetLastInsertedCredentialsUseCase.Callback() {
-                    @Override
-                    public void onGetUsername(Credentials credentials) {
-                        //Determine if it's a Soft or full login
-                        boolean comeFrom209= loginActivity.getIntent() != null && loginActivity.getIntent().getBooleanExtra(
-                                START_PULL, false);
-                        if (credentials != null) {
-                            loginType = LoginType.SOFT;
-                            loginActivity.getUsernameEditText().setText(credentials.getUsername());
-                            loginActivity.getUsernameEditText().setEnabled(false);
-                            loginActivity.getUsernameEditText().setText(credentials.getUsername());
-                            if(!comeFrom209){
-                                CommonQuestionView.showKeyboard(loginActivity,
-                                        loginActivity.getPasswordEditText());
-                                loginActivity.getPasswordEditText().requestFocus();
-                            }
-                        } else {
-                            loginType = LoginType.FULL;
-                            loginActivity.getUsernameEditText().setEnabled(true);
-                            loginActivity.getUsernameEditText().setText("");
-
-                        }
-                        if(comeFrom209) {
-                            launchUpgradeMetadataIfComeFrom209();
-                        }
-                    }
-                });
-    }
-
-
-    private void launchUpgradeMetadataIfComeFrom209() {
-        loginActivity.showProgressBar();
-        launchPull(false);
-        loginActivity.findViewById(R.id.progress_message).setVisibility(View.VISIBLE);
     }
 
     private void initLogoutButton() {
@@ -291,15 +274,14 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
                     public void onLogoutSuccess() {
                         //Re-setting the state of all components
                         // for a full-login
-                        toggleVisibility(serverURLContainer);
+                        toggleSpinnerVisibility();
                         loginActivity.getUsernameEditText().setText("");
                         loginActivity.getPasswordEditText().setText("");
-                        loginType = LoginType.FULL;
                         toggleVisibility(logoutButton);
                         loginActivity.getUsernameEditText().setEnabled(true);
                         Log.d(this.getClass().getSimpleName(), "onLogoutSuccess ");
-                        toggleText(advancedOptions,R.string.advanced_options,R.string.simple_options);
-                        PreferencesEReferral.setLastLoginType(loginType);
+                        toggleText(advancedOptions, R.string.advanced_options,
+                                R.string.simple_options);
                     }
 
                     @Override
@@ -312,6 +294,24 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
             }
         });
 
+    }
+
+    private void toggleSpinnerVisibility() {
+        toggleVisibility(serverSpinner);
+        if (serverSpinner.getVisibility() == View.GONE) {
+            showServerEditUrls(false);
+        } else if (serverSpinner.getSelectedItem().equals(
+                loginActivity.getString(R.string.custom))) {
+            showServerEditUrls(true);
+        }
+    }
+
+    private void changeVisibility(View view, boolean value) {
+        if (value) {
+            view.setVisibility(View.VISIBLE);
+        } else {
+            view.setVisibility(View.GONE);
+        }
     }
 
     private void initForgotPasswordButton() {
@@ -327,44 +327,91 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     private void initAdvancedOptionsButton() {
         advancedOptions = (Button) loginActivity.findViewById(R.id.advanced_options);
-        advancedOptions.setText(
-                Utils.getInternationalizedString(R.string.advanced_options, loginActivity));
 
         advancedOptions.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-
-                switch (loginType) {
-                    case SOFT:
-                        toggleVisibility(logoutButton);
-                        break;
-
-                    case FULL:
-                        toggleVisibility(demoButton);
-                        break;
-                }
-                toggleVisibility(serverURLContainer);
+                toggleVisibility(demoButton);
+                toggleSpinnerVisibility();
                 toggleText(advancedOptions, R.string.advanced_options, R.string.simple_options);
             }
         });
     }
 
 
-    private void initServerURLField() {
-        serverURLContainer = loginActivity.findViewById(R.id.text_layout_server_url);
-        ((TextInputLayout) loginActivity.findViewById(R.id.text_layout_server_url)).setHint(
-                Utils.getInternationalizedString(R.string.server_url, loginActivity));
+    private void initWebServiceURLField() {
+        webserviceURLContainer = initTextInputLayout(R.id.text_layout_webservice_server_url,
+                R.string.server_url);
+    }
+
+    private void initProgramURLField() {
+        programURLContainer = initTextInputLayout(R.id.text_layout_program_server_url,
+                R.string.program_url);
+    }
+
+    private void initProgramEndpointField() {
+        programEndpointContainer = initTextInputLayout(R.id.text_layout_program_server_endpoint,
+                R.string.program_endpoint);
+    }
+
+    private void initWebURLField() {
+        webviewURLContainer = initTextInputLayout(R.id.text_layout_web_server_url,
+                R.string.webviews_url);
+    }
+
+    private View initTextInputLayout(int layoutId, int hintId) {
+        View view = loginActivity.findViewById(layoutId);
+        ((TextInputLayout) view).setHint(translate(hintId));
+        return view;
+    }
+
+    @Override
+    public void initProgramServer() {
+        programURLEditText = loginActivity.findViewById(R.id.edittext_program_server_url);
+        if (programURLEditText != null) {
+            programURLEditText.setText(settings.getProgramUrl());
+        }
+    }
+
+    @Override
+    public void initWebviewServer() {
+        webviewURLEditText = loginActivity.findViewById(R.id.edittext_web_server_url);
+        if (webviewURLEditText != null) {
+            webviewURLEditText.setText(settings.getWebUrl());
+        }
+    }
+
+    @Override
+    public void initProgramEndpoint() {
+        programEndPointEditText = loginActivity.findViewById(R.id.edittext_program_server_endpoint);
+        if (programEndPointEditText != null) {
+            programEndPointEditText.setText(settings.getProgramEndPoint());
+        }
+    }
+
+    @Override
+    public void saveOtherValues(final ALoginActivityStrategy.SettingsCallback callback) {
+        getSettingsUseCase.execute(new GetSettingsUseCase.Callback() {
+            @Override
+            public void onSuccess(Settings setting) {
+                settings = setting;
+                settings.setProgramUrl(programURLEditText.getText().toString());
+                settings.setProgramEndPoint(programEndPointEditText.getText().toString());
+                settings.setWebUrl(webviewURLEditText.getText().toString());
+                saveSettingsUseCase.execute(new SaveSettingsUseCase.Callback() {
+                    @Override
+                    public void onSuccess() {
+                        callback.onSuccess();
+                    }
+                }, settings);
+            }
+        });
     }
 
     private void initPasswordField() {
         EditText passwordEditText = loginActivity.getPasswordEditText();
         passwordEditText.setInputType(InputType.TYPE_CLASS_NUMBER);
         passwordEditText.setTransformationMethod(PasswordTransformationMethod.getInstance());
-
-        TextInputLayout passwordHint =
-                (TextInputLayout) loginActivity.findViewById(R.id.password_hint);
-        passwordHint.setHint(
-                Utils.getInternationalizedString(R.string.login_password, loginActivity));
     }
 
     private void onForgotPassword() {
@@ -383,18 +430,15 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
                     @Override
                     public void onNetworkError() {
                         loginActivity.onFinishLoading(null);
-                        showMessageDialog(Utils.getInternationalizedString(R.string.network_error,
-                                loginActivity),
-                                Utils.getInternationalizedString(R.string.error_conflict_title,
-                                        loginActivity));
+                        showMessageDialog(translate(R.string.network_error),
+                                translate(R.string.error_conflict_title));
                     }
 
                     @Override
                     public void onError(String messages) {
                         loginActivity.onFinishLoading(null);
                         showMessageDialog(messages,
-                                Utils.getInternationalizedString(R.string.error_conflict_title,
-                                        loginActivity));
+                                translate(R.string.error_conflict_title));
                     }
                 });
 
@@ -403,7 +447,6 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     @Override
     public void onLoginSuccess(final Credentials credentials) {
-        PreferencesEReferral.setLastLoginType(loginType);
         finishAndGo();
     }
 
@@ -485,34 +528,14 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
     }
 
     @Override
-    public void checkCredentials(Credentials credentials, final Callback callback) {
-        ICredentialsRepository credentialsLocalDataSource = new CredentialsLocalDataSource();
-        Credentials savedCredentials = credentialsLocalDataSource.getLastValidCredentials();
-        if (savedCredentials == null || savedCredentials.isEmpty()
-                || savedCredentials.getUsername().equals(
-                credentials.getUsername()) && (!savedCredentials.getPassword().equals(
-                credentials.getPassword()) || !savedCredentials.getServerURL().equals(
-                credentials.getServerURL()))) {
-            callback.onSuccessDoLogin();
-        } else if (savedCredentials.getUsername().equals(
-                credentials.getUsername()) && savedCredentials.getPassword().equals(
-                credentials.getPassword())
-                && savedCredentials.getServerURL().equals(
-                credentials.getServerURL())) {
-            callback.onSuccess();
-        } else {
-            logout(new LogoutUseCase.Callback() {
-                @Override
-                public void onLogoutSuccess() {
-                    callback.onSuccessDoLogin();
-                }
-
-                @Override
-                public void onLogoutError(java.lang.String message) {
-                    callback.onError();
-                }
-            });
-        }
+    public void loadSettings(final SettingsCallback settingsCallback) {
+        getSettingsUseCase.execute(new GetSettingsUseCase.Callback() {
+            @Override
+            public void onSuccess(Settings setting) {
+                settings = setting;
+                settingsCallback.onSuccess();
+            }
+        });
     }
 
     private void launchPull(boolean isDemo) {
@@ -541,7 +564,44 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
             @Override
             public void onError(Throwable throwable) {
                 loginActivity.onFinishLoading(null);
-                loginActivity.showError(R.string.dialog_pull_error);
+
+                if (throwable instanceof InvalidMetadataException) {
+                    InvalidMetadataException exception = (InvalidMetadataException) throwable;
+
+                    switch (exception.getTypeOfFailure()) {
+                        case TRANSLATIONS:
+                            loginActivity.showError(
+                                    R.string.error_unable_to_download_translations);
+                            break;
+                        case CONFIGURATION_FILES:
+                            loginActivity.showError(
+                                    R.string.error_unable_to_download_configuration_files);
+                            break;
+                        case TRANSLATIONS_AND_CONFIGURATION_FILES:
+                            loginActivity.showError(
+                                    R.string.error_unable_to_download_translations_and_configuration_files);
+                            break;
+                    }
+                } else {
+                    loginActivity.showError(R.string.dialog_pull_error);
+
+                }
+
+                executeLogout();
+            }
+
+            private void executeLogout() {
+                logout(new LogoutUseCase.Callback() {
+                    @Override
+                    public void onLogoutSuccess() {
+                        Log.e(this.getClass().getSimpleName(), "onLogoutSuccess ");
+                    }
+
+                    @Override
+                    public void onLogoutError(String message) {
+                        Log.e(this.getClass().getSimpleName(), "onLogoutError " + message);
+                    }
+                });
             }
 
             @Override
@@ -560,7 +620,7 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
             public void onWarning(WarningException warning) {
                 Log.w(this.getClass().getSimpleName(), "onWarning " + warning.getMessage());
                 loginActivity.showError(
-                        Utils.getInternationalizedString(R.string.warning_message, loginActivity)
+                        translate(R.string.warning_message)
                                 + warning.getMessage());
             }
 
@@ -582,8 +642,7 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
         builder.setTitle(title);
         builder.setMessage(message);
         builder.setPositiveButton(
-                Utils.getInternationalizedString(R.string.provider_redeemEntry_msg_matchingOk,
-                        loginActivity),
+                translate(R.string.provider_redeemEntry_msg_matchingOk),
                 new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
@@ -595,7 +654,6 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
 
     private void initDemoButton() {
         demoButton = (Button) loginActivity.findViewById(R.id.demo_login_button);
-        demoButton.setText(Utils.getInternationalizedString(R.string.demo_login, loginActivity));
 
         demoButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -624,11 +682,6 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
                             }
 
                             @Override
-                            public void onServerPinChanged() {
-                                Log.e(this.getClass().getSimpleName(), "Invalid saved Pin");
-                            }
-
-                            @Override
                             public void onNetworkError() {
                                 Log.e(this.getClass().getSimpleName(), "Network Error");
                             }
@@ -648,6 +701,11 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
                             @Override
                             public void onMaxLoginAttemptsReachedError() {
                                 Log.d(TAG, "onMaxLoginAttemptsReachedError");
+                            }
+
+                            @Override
+                            public void onServerNotAvailable(String message) {
+                                Log.e(this.getClass().getSimpleName(), "onServerNotAvailable error");
                             }
                         });
             }
@@ -711,5 +769,9 @@ public class LoginActivityStrategy extends ALoginActivityStrategy {
                 .getLogoutUseCase(loginActivity);
 
         logoutUseCase.execute(callback);
+    }
+
+    private String translate(@StringRes int resourceId) {
+        return loginActivity.translate(resourceId);
     }
 }

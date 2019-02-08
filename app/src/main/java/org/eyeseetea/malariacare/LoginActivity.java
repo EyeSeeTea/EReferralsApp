@@ -30,7 +30,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
-import android.support.design.widget.TextInputLayout;
+import android.support.annotation.StringRes;
 import android.support.v4.content.ContextCompat;
 import android.text.Editable;
 import android.text.Html;
@@ -248,7 +248,7 @@ public class LoginActivity extends Activity {
         return super.onOptionsItemSelected(item);
     }
     public void showError(int message) {
-        Toast.makeText(this, Utils.getInternationalizedString(message, this),
+        Toast.makeText(this, translate(message),
                 Toast.LENGTH_LONG).show();
     }
 
@@ -261,16 +261,10 @@ public class LoginActivity extends Activity {
         FieldTextWatcher watcher = new FieldTextWatcher();
         initDataDownloadPeriodDropdown();
         //Populate server with the current value
-        serverText = (EditText) findViewById(R.id.edittext_server_url);
-        serverText.setText(ServerAPIController.getServerUrl());
-        serverText.addTextChangedListener(watcher);
-
+        initServerUrls(watcher);
         //Username, Password blanks to force real login
         usernameEditText = (EditText) findViewById(R.id.edittext_username);
         usernameEditText.setText(DEFAULT_USER);
-        TextInputLayout userHint = (TextInputLayout) findViewById(R.id.username_hint);
-        userHint.setHint(
-                Utils.getInternationalizedString(R.string.login_userName, mContext));
         usernameEditText.addTextChangedListener(watcher);
         passwordEditText = (EditText) findViewById(R.id.edittext_password);
         passwordEditText.setText(DEFAULT_PASSWORD);
@@ -281,37 +275,33 @@ public class LoginActivity extends Activity {
         loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                onLoginButtonClicked(serverText.getText(), usernameEditText.getText(),
-                        passwordEditText.getText());
+                mLoginActivityStrategy.saveOtherValues(new ALoginActivityStrategy.SettingsCallback() {
+                    @Override
+                    public void onSuccess() {
+                        onLoginButtonClicked(serverText.getText(), usernameEditText.getText(),
+                                passwordEditText.getText());
+                    }
+                });
             }
         });
-        loginButton.setText(Utils.getInternationalizedString(R.string.login_btn_login, mContext));
 
         mLoginActivityStrategy.initViews();
+    }
+
+    private void initServerUrls(FieldTextWatcher watcher) {
+        serverText = (EditText) findViewById(R.id.edittext_loginweb_server_url);
+        serverText.setText(ServerAPIController.getServerUrl());
+        serverText.addTextChangedListener(watcher);
+
+        mLoginActivityStrategy.initProgramServer();
+        mLoginActivityStrategy.initWebviewServer();
+        mLoginActivityStrategy.initProgramEndpoint();
     }
 
     public void login(String serverUrl, String username, String password) {
         final Credentials credentials = new Credentials(serverUrl, username, password);
         onStartLoading();
-        mLoginActivityStrategy.checkCredentials(credentials, new ALoginActivityStrategy.Callback() {
-            @Override
-            public void onSuccess() {
-                mLoginActivityStrategy.onLoginSuccess(credentials);
-            }
-
-            @Override
-            public void onSuccessDoLogin() {
-                executeLoginUseCase(credentials);
-            }
-
-            @Override
-            public void onError() {
-                hideProgressBar();
-                showError(Utils.getInternationalizedString(R.string.login_unexpected_error,
-                        mContext));
-            }
-        });
-
+        executeLoginUseCase(credentials);
     }
 
 
@@ -328,21 +318,13 @@ public class LoginActivity extends Activity {
                 Log.d(TAG, "onServerURLNotValid");
                 onFinishLoading(null);
                 serverText.setError(
-                        Utils.getInternationalizedString(R.string.login_invalid_server_url,
-                                mContext));
-                showError(Utils.getInternationalizedString(R.string.login_invalid_server_url,
-                        mContext));
+                        translate(R.string.login_invalid_server_url));
+                showError(translate(R.string.login_invalid_server_url));
             }
 
             @Override
             public void onInvalidCredentials() {
                 Log.d(TAG, "onInvalidCredentials");
-                mLoginActivityStrategy.onBadCredentials();
-            }
-
-            @Override
-            public void onServerPinChanged() {
-                Log.d(TAG, "onServerPinChanged");
                 mLoginActivityStrategy.onBadCredentials();
             }
 
@@ -356,21 +338,26 @@ public class LoginActivity extends Activity {
             public void onConfigJsonInvalid() {
                 Log.d(TAG, "onConfigJsonInvalid");
                 onFinishLoading(null);
-                showError(Utils.getInternationalizedString(R.string.login_error_json, mContext));
+                showError(translate(R.string.login_error_json));
             }
 
             @Override
             public void onUnexpectedError() {
                 Log.d(TAG, "onUnexpectedError");
                 hideProgressBar();
-                showError(Utils.getInternationalizedString(R.string.login_unexpected_error,
-                        mContext));
+                showError(translate(R.string.login_unexpected_error));
             }
 
             @Override
             public void onMaxLoginAttemptsReachedError() {
                 Log.d(TAG, "onMaxLoginAttemptsReachedError");
                 mLoginActivityStrategy.disableLogin();
+            }
+
+            @Override
+            public void onServerNotAvailable(String message) {
+                Log.d(TAG, "onServerNotAvailable");
+                mLoginActivityStrategy.onServerNotAvailable(message);
             }
         });
     }
@@ -600,8 +587,13 @@ public class LoginActivity extends Activity {
         @Override
         protected void onPostExecute(final Exception exception) {
             //Error
-            onFinishLoading(null);
-            init();
+            mLoginActivityStrategy.loadSettings(new ALoginActivityStrategy.SettingsCallback() {
+                @Override
+                public void onSuccess() {
+                    onFinishLoading(null);
+                    init();
+                }
+            });
         }
     }
 
@@ -727,6 +719,10 @@ public class LoginActivity extends Activity {
     protected void onDestroy() {
         Log.d(TAG, "AndroidLifeCycle: onDestroy");
         super.onDestroy();
+    }
+
+    public String translate(@StringRes int id){
+        return Utils.getInternationalizedString(id, this);
     }
 }
 

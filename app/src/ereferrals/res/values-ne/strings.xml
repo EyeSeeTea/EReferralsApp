@@ -2,14 +2,15 @@
 <resources>
 
 <!-- TERMS FROM POEDITOR -->
-    <string name="login_userName">"प्रयोगकर्ता कोड"</string>
-    <string name="login_password">"पिन"</string>
-    <string name="advanced_options">"उन्नत विकल्पहरू"</string>
-    <string name="simple_options">"सरल विकल्पहरू"</string>
-    <string name="server_url">"सर्भर URL"</string>
+<string name="login_userName">"प्रयोगकर्ता कोड"</string>
+<string name="login_password">"पिन"</string>
+<string name="advanced_options">"उन्नत विकल्पहरू"</string>
+<string name="simple_options">"सरल विकल्पहरू"</string>
+<string name="server_url">वेब सेवा URL</string>
+<string name="program_url">कार्यक्रम कन्फिगुरेसन URL</string>
+<string name="webviews_url">वेब URL</string>
 
-
-    <!-- Open Referrals -->
+<!-- Open Referrals -->
 <string name="ipc_menu_openReferrals">"रेफरलहरू खोल्नुहोस्"</string>
 
 <!-- Add + -->
@@ -709,6 +710,7 @@
 <string name="dynamic_error_number">"अमान्य संख्या"</string>
 <string name="date_format_forward_slash">"साल-  महिना- गते"</string>
 <string name="network_error">"नेटवर्कमा समस्या छ, कृपया पछि फेरि प्रयास गर्नुहोस्।"</string>
+<string name="not_available">"सर्भर उपलब्ध छैन।"</string>
 <string name="login_invalid_credentials">"अवैध प्रमाणहरू"</string>
 <string name="login_unexpected_error">"त्रुटि देखा परेको छ। पछि फेरि प्रयास गर्नुहोस्"</string>
 <string name="login_invalid_server_url">"अमान्य सर्भर URL"</string>
@@ -968,8 +970,22 @@
     <string name="element_not_installed">"Element SDK स्थापित छैन!"</string>
     <string name="check_metadata_title">"नरम लगिनहरूमा मेटाडाटा अद्यावधिकहरूको जाँच गर्नुहोस्"</string>
     <string name="settings_title_program_url_config">"प्रोग्राम विन्यास URL"</string>
+    <string name="settings_title_program_endpoint_config">"प्रोग्राम कन्फिगरेसन अन्तबिन्दु"</string>
     <string name="settings_title_program_username_config">"प्रोग्राम कन्फिगरेसन प्रयोगकर्ता नाम"</string>
     <string name="settings_title_program_password_config">"प्रोग्राम कन्फिगरेसन पासवर्ड"</string>
 <string name="demo_page_text">"तपाईं डेमो मोडमा हुनुहुन्छ र यो एक अनलाइन मोड्युल हो। यो जानकारी हेर्न लगआउट गर्नुहोस् र मान्य प्रयोगकर्ताको साथ लगइन गर्नुहोस्।"</string>
 <string name="erro_page_text">"तपाईं अफलाइन हुनुहुन्छ र यो एक अनलाइन मोड्युल हो। यो जानकारी हेर्न कृपया नेटवर्कमा जडान गर्नुहोस्।"</string>
+<string name="production">उत्पादन</string>
+<string name="training">प्रशिक्षण</string>
+<string name="custom">अनुकूलन</string>
+
+    <string name="splash_progress_init_db">डेटाबेस सुरू गर्दै ...</string>
+    <string name="splash_progress_downloading_languages">वर्तमान भाषा सर्तहरू डाउनलोड गर्नुहोस् ...</string>
+    <string name="splash_progress_executing_maintenance_task">रखरखाव कार्य कार्यान्वयन गर्दै ...</string>
+
+    <string name="pull_dialog_progress_generic_message">मेटाडेटा अपडेट गर्दै …</string>
+    <string name="push_invalid_credentials">हामीले फेला पारेको छ कि पिनले सर्भरमा परिवर्तन गरेको छ, कृपया पिन फेरि सम्मिलित गर्नुहोस्</string>
+
+    <string name="web_view_network_error">वेब पेज लोड गर्दा नेटवर्क समस्याहरू छन्</string>
+    <string name="push_network_error">प्रक्रिया प्रक्रियामा सञ्जाल समस्याहरू छन्</string>
 </resources>

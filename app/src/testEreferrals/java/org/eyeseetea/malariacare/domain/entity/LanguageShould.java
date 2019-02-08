@@ -1,5 +1,6 @@
 package org.eyeseetea.malariacare.domain.entity;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
 import org.junit.Rule;
@@ -37,6 +38,7 @@ public class LanguageShould {
     @Test
     public void return_language_code_and_name_correctly() {
         Language language = new Language("es", "Spanish");
+
         assertThat(language.getCode(), is("es"));
         assertThat(language.getName(),is("Spanish"));
     }
