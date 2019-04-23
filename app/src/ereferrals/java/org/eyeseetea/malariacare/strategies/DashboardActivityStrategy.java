@@ -74,7 +74,7 @@ import org.eyeseetea.malariacare.domain.usecase.SendToExternalAppPaperVoucherUse
 import org.eyeseetea.malariacare.domain.usecase.TreatExternalAppResultUseCase;
 import org.eyeseetea.malariacare.factories.AppInfoFactory;
 import org.eyeseetea.malariacare.fragments.AVFragment;
-import org.eyeseetea.malariacare.fragments.DashboardUnsentFragment;
+import org.eyeseetea.malariacare.fragments.SurveysFragment;
 import org.eyeseetea.malariacare.fragments.WebViewFragment;
 import org.eyeseetea.malariacare.layout.adapters.survey.DynamicTabAdapter;
 import org.eyeseetea.malariacare.layout.adapters.survey.navigation.NavigationBuilder;
@@ -97,13 +97,13 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     static final int REQUEST_AUTHORIZATION = 101;
 
-    private DashboardUnsentFragment mDashboardUnsentFragment;
     private WebViewFragment openFragment, closeFragment, statusFragment;
     private GetSettingsUseCase mSettingUseCase;
     private DownloadMediaUseCase mDownloadMediaUseCase;
     private Credentials credentials;
     public AVFragment avFragment;
     private ImageView mRefreshButton;
+    private SurveysFragment surveysFragment;
     private static final long SECONDS = 1000;
     private static AlarmManager alarmManagerInstance;
     private static final int ENABLE_MANUAL_PUSH_REQUEST_CODE = 1;
@@ -166,9 +166,10 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     }
 
     private void launchPush() {
+
         Intent pushIntent = new Intent(mDashboardActivity, PushService.class);
         pushIntent.putExtra(SurveyService.SERVICE_METHOD, PushService.PENDING_SURVEYS_ACTION);
-        mDashboardActivity.startService(pushIntent);
+        PushService.enqueueWork(mDashboardActivity, pushIntent);
     }
 
     private void showToast(@StringRes int text) {
@@ -199,6 +200,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         } else {
             showStockFragment(activity, false);
         }
+
+        mDashboardActivity.setCurrentFragment(closeFragment);
     }
 
     @Override
@@ -209,7 +212,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
             public void onSuccess(Settings setting) {
                 String webViewFragmentUrl = getWebviewUrl(R.string.url_closed_fragment);
                 String url = getFormattedUrl(setting.getWebUrl(), webViewFragmentUrl);
-                loadFragment(url, closeFragment, R.id.dashboard_stock_container, R.string.tab_tag_improve);
+                loadFragment(url, closeFragment, R.id.dashboard_stock_container,
+                        R.string.tab_tag_improve);
             }
         });
         return isMoveToLeft;
@@ -294,16 +298,16 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     @Override
     public void showFirstFragment() {
-        mDashboardUnsentFragment = new DashboardUnsentFragment();
-        mDashboardUnsentFragment.setArguments(mDashboardActivity.getIntent().getExtras());
-        mDashboardUnsentFragment.reloadData();
-        mDashboardUnsentFragment.reloadHeader(mDashboardActivity);
+        surveysFragment = new SurveysFragment();
+        surveysFragment.setArguments(mDashboardActivity.getIntent().getExtras());
+        surveysFragment.reloadData();
+        surveysFragment.reloadHeader(mDashboardActivity);
 
         FragmentTransaction ft = mDashboardActivity.getFragmentManager().beginTransaction();
         ft.setCustomAnimations(R.animator.anim_slide_in_left, R.animator.anim_slide_out_left);
 
         ft.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE);
-        ft.replace(R.id.dashboard_details_container, mDashboardUnsentFragment);
+        ft.replace(R.id.dashboard_details_container, surveysFragment);
 
         ft.commit();
         if (BuildConfig.translations) {
@@ -314,17 +318,19 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     @Override
     public void reloadFirstFragment() {
-        if (mDashboardUnsentFragment.isAdded()) {
-            mDashboardUnsentFragment.reloadData();
+        if (surveysFragment.isAdded()) {
+            surveysFragment.reloadData();
         } else {
             showFirstFragment();
         }
+
+        mDashboardActivity.setCurrentFragment(surveysFragment);
     }
 
     @Override
     public void reloadFirstFragmentHeader() {
-        if(!DashboardActivity.dashboardActivity.isSurveyFragmentActive()) {
-            mDashboardUnsentFragment.reloadHeader(mDashboardActivity);
+        if (!DashboardActivity.dashboardActivity.isSurveyFragmentActive()) {
+            surveysFragment.reloadHeader(mDashboardActivity);
         }
     }
 
@@ -336,7 +342,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
             public void onSuccess(Settings setting) {
                 String webViewFragmentUrl = getWebviewUrl(R.string.url_open_fragment);
                 String url = getFormattedUrl(setting.getWebUrl(), webViewFragmentUrl);
-                loadFragment(url, openFragment, R.id.dashboard_completed_container, R.string.tab_tag_assess);
+                loadFragment(url, openFragment, R.id.dashboard_completed_container,
+                        R.string.tab_tag_assess);
             }
         });
     }
@@ -349,6 +356,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         } else {
             showSecondFragment();
         }
+
+        mDashboardActivity.setCurrentFragment(openFragment);
     }
 
     @Override
@@ -359,7 +368,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
             public void onSuccess(Settings setting) {
                 String webViewFragmentUrl = getWebviewUrl(R.string.url_status_fragment);
                 String url = getFormattedUrl(setting.getWebUrl(), webViewFragmentUrl);
-                loadFragment(url, statusFragment, R.id.dashboard_av_container, R.string.tab_tag_monitor);
+                loadFragment(url, statusFragment, R.id.dashboard_av_container,
+                        R.string.tab_tag_monitor);
             }
         });
     }
@@ -383,9 +393,9 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     }
 
     private String getWebviewUrl(int valueId) {
-        if(credentials!=null && credentials.isDemoCredentials()){
+        if (credentials != null && credentials.isDemoCredentials()) {
             return null;
-        } else{
+        } else {
             return mDashboardActivity.getString(valueId);
         }
     }
@@ -405,6 +415,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         }
         mDashboardActivity.replaceFragment(R.id.dashboard_charts_container, avFragment);
         avFragment.hideHeader();
+
+        mDashboardActivity.setCurrentFragment(avFragment);
     }
 
     @Override
@@ -415,8 +427,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     @Override
     public void showUnsentFragment() {
         mDashboardActivity.replaceFragment(R.id.dashboard_details_container,
-                mDashboardUnsentFragment);
-        mDashboardUnsentFragment.reloadHeader(mDashboardActivity);
+                surveysFragment);
+        surveysFragment.reloadHeader(mDashboardActivity);
     }
 
     @Override
@@ -531,19 +543,23 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         externalVoucherSenderResultTreatment(requestCode, resultCode, data);
     }
 
-    private void externalVoucherSenderResultTreatment(int requestCode, int resultCode, Intent data) {
-        IExternalVoucherRegistry elementController = new ElementController(DashboardActivity.dashboardActivity);
-        TreatExternalAppResultUseCase treatExternalAppResultUseCase = new TreatExternalAppResultUseCase(elementController, new IExternalVoucherRegistry.Callback() {
-            @Override
-            public void onSuccess() {
-                Log.d(TAG, "User created");
-            }
+    private void externalVoucherSenderResultTreatment(int requestCode, int resultCode,
+            Intent data) {
+        IExternalVoucherRegistry elementController = new ElementController(
+                DashboardActivity.dashboardActivity);
+        TreatExternalAppResultUseCase treatExternalAppResultUseCase =
+                new TreatExternalAppResultUseCase(elementController,
+                        new IExternalVoucherRegistry.Callback() {
+                            @Override
+                            public void onSuccess() {
+                                Log.d(TAG, "User created");
+                            }
 
-            @Override
-            public void onError() {
-                Log.d(TAG, "User is not created");
-            }
-        });
+                            @Override
+                            public void onError() {
+                                Log.d(TAG, "User is not created");
+                            }
+                        });
         treatExternalAppResultUseCase.execute(requestCode, resultCode, data);
     }
 
@@ -555,20 +571,24 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         } else {
             showAVFragment();
         }
+
+        mDashboardActivity.setCurrentFragment(statusFragment);
     }
 
     public void showEndSurveyMessage(SurveyDB surveyDB) {
         if (surveyDB != null && !noIssueVoucher(surveyDB) && !hasPhone(surveyDB)) {
             final String voucherUId = surveyDB.getVoucherUid();
 
-            GetSettingsUseCase getSettingsUseCase = new GetSettingsUseCase(new UIThreadExecutor(), new AsyncExecutor(),
+            GetSettingsUseCase getSettingsUseCase = new GetSettingsUseCase(new UIThreadExecutor(),
+                    new AsyncExecutor(),
                     new SettingsDataSource(mDashboardActivity.getBaseContext()));
             getSettingsUseCase.execute(new GetSettingsUseCase.Callback() {
                 @Override
                 public void onSuccess(Settings setting) {
                     DialogInterface.OnClickListener onClickListener = null;
-                    if(setting.isElementActive()){
-                        onClickListener = createOnClickListenerToSendVoucherToExternalApp(voucherUId, mDashboardActivity);
+                    if (setting.isElementActive()) {
+                        onClickListener = createOnClickListenerToSendVoucherToExternalApp(
+                                voucherUId, mDashboardActivity);
                     }
 
                     mDashboardActivity.showException(mDashboardActivity, "", String.format(
@@ -580,21 +600,24 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     }
 
     @NonNull
-    private DialogInterface.OnClickListener createOnClickListenerToSendVoucherToExternalApp(final String voucherUId, final Context context) {
+    private DialogInterface.OnClickListener createOnClickListenerToSendVoucherToExternalApp(
+            final String voucherUId, final Context context) {
         return new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
                 IExternalVoucherRegistry elementController = new ElementController(context);
                 AsyncExecutor mAsyncExecutor = new AsyncExecutor();
                 UIThreadExecutor mMainExecutor = new UIThreadExecutor();
-                SendToExternalAppPaperVoucherUseCase elementSentVoucherUseCase = new SendToExternalAppPaperVoucherUseCase(mMainExecutor, mAsyncExecutor,
-                        elementController, new IExternalVoucherRegistry.SenderCallback() {
-                    @Override
-                    public void onNotInstalledApp() {
-                        Toast.makeText(context,
-                                translate(R.string.element_not_installed), Toast.LENGTH_LONG).show();
-                    }
-                });
+                SendToExternalAppPaperVoucherUseCase elementSentVoucherUseCase =
+                        new SendToExternalAppPaperVoucherUseCase(mMainExecutor, mAsyncExecutor,
+                                elementController, new IExternalVoucherRegistry.SenderCallback() {
+                            @Override
+                            public void onNotInstalledApp() {
+                                Toast.makeText(context,
+                                        translate(R.string.element_not_installed),
+                                        Toast.LENGTH_LONG).show();
+                            }
+                        });
                 elementSentVoucherUseCase.execute(voucherUId);
             }
         };
@@ -654,7 +677,7 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         @Override
         public void onReceive(Context context, Intent intent) {
             managePushIntent(intent);
-            mDashboardUnsentFragment.reloadData();
+            surveysFragment.reloadData();
         }
     };
 
