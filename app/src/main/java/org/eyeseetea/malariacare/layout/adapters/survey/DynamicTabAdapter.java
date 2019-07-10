@@ -30,6 +30,7 @@ import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.support.annotation.Nullable;
+import android.support.annotation.StringRes;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -44,7 +45,6 @@ import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TableLayout;
 import android.widget.TableRow;
-import android.widget.TextView;
 
 import org.eyeseetea.malariacare.BuildConfig;
 import org.eyeseetea.malariacare.DashboardActivity;
@@ -114,7 +114,7 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
     public static int failedValidations;
 
     public static View navigationButtonHolder;
-    private final Context context;
+    public final Context context;
     public NavigationController navigationController;
     public boolean reloadingQuestionFromInvalidOption;
     TabDB mTabDB;
@@ -143,7 +143,9 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
     private boolean isBackward = true;
     private boolean isASurveyCreatedInOtherApp;
 
-    public DynamicTabAdapter(Context context, boolean reviewMode, boolean isASurveyCreatedInOtherApp) throws NullPointerException {
+    public DynamicTabAdapter(Context context, boolean reviewMode,
+            boolean isASurveyCreatedInOtherApp, boolean jumpingActive) throws NullPointerException {
+
         this.isASurveyCreatedInOtherApp = isASurveyCreatedInOtherApp;
         mReviewMode = reviewMode;
         this.lInflater = LayoutInflater.from(context);
@@ -175,7 +177,7 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
         navigationController.setTotalPages(totalPages);
         isClicked = false;
 
-        mDynamicTabAdapterStrategy = new DynamicTabAdapterStrategy(this);
+        mDynamicTabAdapterStrategy = new DynamicTabAdapterStrategy(this, jumpingActive);
         mDynamicTabAdapterStrategy.initSurveys(readOnly);
     }
 
@@ -306,11 +308,14 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
         }
     }
 
-
     public void saveTextValue(View view, String newValue, boolean moveToNextQuestion) {
         QuestionDB questionDB = (QuestionDB) view.getTag();
-        questionDB.saveValuesText(newValue, isASurveyCreatedInOtherApp);
-        executeTabLogic(questionDB, null);
+
+        if (!mReviewMode){
+            questionDB.saveValuesText(newValue, isASurveyCreatedInOtherApp);
+            executeTabLogic(questionDB, null);
+        }
+
         if (moveToNextQuestion) {
             navigationController.isMovingToForward = true;
             finishOrNext();
@@ -318,6 +323,7 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
             showOrHideChildren(questionDB);
         }
     }
+    
 
     public void saveOptionValue(View view, OptionDB selectedOptionDB, QuestionDB questionDB,
             boolean moveToNextQuestion) {
@@ -329,8 +335,9 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
             isBackward = false;
         }
 
-        questionDB.saveValuesDDL(selectedOptionDB, valueDB);
-
+        if (!mReviewMode) {
+            questionDB.saveValuesDDL(selectedOptionDB, valueDB);
+        }
 
         if (questionDB.getOutput().equals(Constants.IMAGE_3_NO_DATAELEMENT) ||
                 questionDB.getOutput().equals(Constants.IMAGE_RADIO_GROUP_NO_DATAELEMENT)) {
@@ -497,8 +504,6 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
 
         //QuestionDB
         CustomTextView headerView = (CustomTextView) rowView.findViewById(question);
-        ((TextView) rowView.findViewById(R.id.question_title)).setText(
-                Utils.getInternationalizedString(R.string.new_survey_title, context));
 
         //Load a font which support Khmer character
         Typeface tf = Typeface.createFromAsset(context.getAssets(),
@@ -570,6 +575,10 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
             renderQuestion(rowView, tabType, screenQuestionDB);
         }
 
+        if (TabDB.isMultiQuestionTab(tabType)){
+            mReviewMode = false;
+        }
+
         rowView.requestLayout();
         reloadingQuestionFromInvalidOption = false;
         return rowView;
@@ -604,7 +613,10 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
             if (questionView instanceof IMultiQuestionView) {
                 mMultiQuestionViews.add((IMultiQuestionView) questionView);
                 ((IMultiQuestionView) questionView).setHeader(
-                        Utils.getInternationalizedString(screenQuestionDB.getForm_name()));
+                        translate(screenQuestionDB.getForm_name()));
+
+                mDynamicTabAdapterStrategy.setJumpingNextQuestionActive(
+                        (CommonQuestionView)questionView);
             }
 
             addTagQuestion(screenQuestionDB, (View) questionView);
@@ -612,9 +624,15 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
             configureLayoutParams(tabType, tableRow, (LinearLayout) questionView);
 
             questionView.setHelpText(
-                    Utils.getInternationalizedString(screenQuestionDB.getHelp_text()));
+                    translate(screenQuestionDB.getHelp_text()));
 
-            questionView.setEnabled(!readOnly);
+            boolean enabled = !readOnly && !screenQuestionDB.isDisabled();
+
+            questionView.setEnabled(enabled);
+
+            if (!enabled){
+                tableRow.setBackground(context.getResources().getDrawable(R.color.disabled_color));
+            }
 
             if (questionView instanceof IImageQuestionView) {
                 ((IImageQuestionView) questionView).setImage(
@@ -868,8 +886,6 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
 
     private void initializeNavigationButtons(View navigationButtonsHolder) {
         View nextButton = (View) navigationButtonsHolder.findViewById(R.id.next_btn);
-        ((TextView) nextButton).setText(
-                Utils.getInternationalizedString(R.string.survey_submit, context));
 
         ((LinearLayout) nextButton.getParent()).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -1152,11 +1168,11 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
      */
     public void surveyShowDone() {
         AlertDialog.Builder msgConfirmation = new AlertDialog.Builder(context)
-                .setTitle(Utils.getInternationalizedString(R.string.survey_completed, context))
+                .setTitle(translate(R.string.survey_completed))
                 .setMessage(
-                        Utils.getInternationalizedString(R.string.survey_completed_text, context))
+                        translate(R.string.survey_completed_text))
                 .setCancelable(false)
-                .setPositiveButton(Utils.getInternationalizedString(R.string.survey_send, context),
+                .setPositiveButton(translate(R.string.survey_send),
                         new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int arg1) {
                         CommonQuestionView.hideKeyboard(PreferencesState.getInstance().getContext(),
@@ -1166,7 +1182,7 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
                     }
                 });
         msgConfirmation.setNegativeButton(
-                Utils.getInternationalizedString(R.string.survey_review, context),
+                translate(R.string.survey_review),
                 new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int arg1) {
                         CommonQuestionView.hideKeyboard(PreferencesState.getInstance().getContext(),
@@ -1312,4 +1328,13 @@ public class DynamicTabAdapter extends BaseAdapter implements ITabAdapter {
         questionDB.saveValuesDDL(selectedOptionDB, questionDB.getValueBySession());
         showOrHideChildren(questionDB);
     }
+
+    private String translate(@StringRes int id){
+        return Utils.getInternationalizedString(id, context);
+    }
+
+    private String translate(String stringKey){
+        return Utils.getInternationalizedString(stringKey,context);
+    }
+
 }

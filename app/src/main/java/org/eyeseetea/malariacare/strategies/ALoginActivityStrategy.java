@@ -28,6 +28,11 @@ public abstract class ALoginActivityStrategy {
         loginActivity.showError(loginActivity.getString(R.string.network_error));
     }
 
+    public void onServerNotAvailable(String message) {
+        loginActivity.hideProgressBar();
+        loginActivity.showError(message);
+    }
+
     public void onBadCredentials() {
         loginActivity.hideProgressBar();
         loginActivity.showError(R.string.login_invalid_credentials);
@@ -49,8 +54,18 @@ public abstract class ALoginActivityStrategy {
 
     public abstract void initLoginUseCase();
 
-    public void checkCredentials(Credentials credentials, Callback callback) {
-        callback.onSuccessDoLogin();
+    public void initProgramServer(){ }
+
+    public void initWebviewServer(){}
+
+    public void initProgramEndpoint(){}
+
+    public void saveOtherValues(final ALoginActivityStrategy.SettingsCallback callback){
+        callback.onSuccess();
+    }
+
+    public void loadSettings(SettingsCallback settingsCallback){
+        settingsCallback.onSuccess();
     }
 
     public interface Callback {
@@ -59,6 +74,10 @@ public abstract class ALoginActivityStrategy {
         void onSuccessDoLogin();
 
         void onError();
+    }
+
+    public interface SettingsCallback {
+        void onSuccess();
     }
 
 

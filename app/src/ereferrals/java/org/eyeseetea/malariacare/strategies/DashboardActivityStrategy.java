@@ -1,6 +1,9 @@
 package org.eyeseetea.malariacare.strategies;
 
+import static org.eyeseetea.malariacare.utils.Utils.getUserLanguageOrDefault;
+
 import android.app.Activity;
+import android.app.AlarmManager;
 import android.app.Dialog;
 import android.app.FragmentTransaction;
 import android.content.BroadcastReceiver;
@@ -9,6 +12,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.StringRes;
 import android.support.v4.content.LocalBroadcastManager;
@@ -17,7 +21,6 @@ import android.view.View;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
 import android.widget.TabHost;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.GoogleApiAvailability;
@@ -30,8 +33,6 @@ import org.eyeseetea.malariacare.DashboardActivity;
 import org.eyeseetea.malariacare.LoginActivity;
 import org.eyeseetea.malariacare.R;
 import org.eyeseetea.malariacare.data.database.CredentialsLocalDataSource;
-import org.eyeseetea.malariacare.data.database.datasources.ConfigurationLocalDataSource;
-import org.eyeseetea.malariacare.data.database.datasources.LanguagesLocalDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.SettingsDataSource;
 import org.eyeseetea.malariacare.data.database.datasources.UserAccountDataSource;
 import org.eyeseetea.malariacare.data.database.model.OptionDB;
@@ -52,12 +53,11 @@ import org.eyeseetea.malariacare.domain.boundary.IExternalVoucherRegistry;
 import org.eyeseetea.malariacare.domain.boundary.executors.IAsyncExecutor;
 import org.eyeseetea.malariacare.domain.boundary.executors.IMainExecutor;
 import org.eyeseetea.malariacare.domain.boundary.io.IFileDownloader;
-import org.eyeseetea.malariacare.domain.boundary.repositories.IConfigurationRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.ICredentialsRepository;
-import org.eyeseetea.malariacare.domain.boundary.repositories.ILanguageRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.IProgramRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.ISettingsRepository;
 import org.eyeseetea.malariacare.domain.boundary.repositories.IUserRepository;
+import org.eyeseetea.malariacare.domain.entity.AppInfo;
 import org.eyeseetea.malariacare.domain.entity.Credentials;
 import org.eyeseetea.malariacare.domain.entity.Settings;
 import org.eyeseetea.malariacare.domain.entity.UserAccount;
@@ -67,23 +67,23 @@ import org.eyeseetea.malariacare.domain.exception.NoFilesException;
 import org.eyeseetea.malariacare.domain.identifiers.CodeGenerator;
 import org.eyeseetea.malariacare.domain.identifiers.UIDGenerator;
 import org.eyeseetea.malariacare.domain.usecase.DownloadMediaUseCase;
+import org.eyeseetea.malariacare.domain.usecase.GetAppInfoUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetSettingsUseCase;
-import org.eyeseetea.malariacare.domain.usecase.GetUrlForWebViewsUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetUserUserAccountUseCase;
 import org.eyeseetea.malariacare.domain.usecase.SendToExternalAppPaperVoucherUseCase;
 import org.eyeseetea.malariacare.domain.usecase.TreatExternalAppResultUseCase;
-import org.eyeseetea.malariacare.domain.usecase.VerifyLanguagesAndConfigFilesWereDownloadedUseCase;
+import org.eyeseetea.malariacare.factories.AppInfoFactory;
 import org.eyeseetea.malariacare.fragments.AVFragment;
-import org.eyeseetea.malariacare.fragments.DashboardUnsentFragment;
+import org.eyeseetea.malariacare.fragments.SurveysFragment;
 import org.eyeseetea.malariacare.fragments.WebViewFragment;
 import org.eyeseetea.malariacare.layout.adapters.survey.DynamicTabAdapter;
 import org.eyeseetea.malariacare.layout.adapters.survey.navigation.NavigationBuilder;
 import org.eyeseetea.malariacare.presentation.executors.AsyncExecutor;
 import org.eyeseetea.malariacare.presentation.executors.UIThreadExecutor;
 import org.eyeseetea.malariacare.services.PushService;
+import org.eyeseetea.malariacare.services.SurveyService;
 import org.eyeseetea.malariacare.services.strategies.PushServiceStrategy;
 import org.eyeseetea.malariacare.utils.Constants;
-import org.eyeseetea.malariacare.utils.Utils;
 
 import java.io.File;
 import java.util.Date;
@@ -97,11 +97,16 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     static final int REQUEST_AUTHORIZATION = 101;
 
-    private DashboardUnsentFragment mDashboardUnsentFragment;
     private WebViewFragment openFragment, closeFragment, statusFragment;
-    private GetUrlForWebViewsUseCase mGetUrlForWebViewsUseCase;
+    private GetSettingsUseCase mSettingUseCase;
     private DownloadMediaUseCase mDownloadMediaUseCase;
+    private Credentials credentials;
     public AVFragment avFragment;
+    private ImageView mRefreshButton;
+    private SurveysFragment surveysFragment;
+    private static final long SECONDS = 1000;
+    private static AlarmManager alarmManagerInstance;
+    private static final int ENABLE_MANUAL_PUSH_REQUEST_CODE = 1;
 
     public DashboardActivityStrategy(DashboardActivity dashboardActivity) {
         super(dashboardActivity);
@@ -109,48 +114,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     @Override
     public void onCreate() {
-
         ICredentialsRepository iCredentialsRepository = new CredentialsLocalDataSource();
-
-        Credentials credentials = iCredentialsRepository.getLastValidCredentials();
-        if (credentials != null && !credentials.isDemoCredentials()) {
-            IConfigurationRepository configurationRepository = new ConfigurationLocalDataSource();
-            ILanguageRepository languageRepository = new LanguagesLocalDataSource();
-
-            VerifyLanguagesAndConfigFilesWereDownloadedUseCase downloadedUseCase =
-                    new VerifyLanguagesAndConfigFilesWereDownloadedUseCase(
-                            configurationRepository, languageRepository,
-                            new VerifyLanguagesAndConfigFilesWereDownloadedUseCase.Callback() {
-                                @Override
-                                public void onSoftLoginStringTranslationFailed() {
-                                    showToast(R.string.warning_strings_download_failed);
-                                }
-
-                                @Override
-                                public void onFullLoginStringTranslationOrConfigFilesFailed(
-                                        TypeOfFailure typeOfFailed) {
-                                    switch (typeOfFailed) {
-                                        case TRANSLATIONS:
-                                            showToast(R.string.error_unable_to_download_translations);
-                                            break;
-                                        case CONFIGURATION_FILES:
-                                            showToast(R.string.error_unable_to_download_configuration_files);
-                                            break;
-                                        case TRANSLATIONS_AND_CONFIGURATION_FILES:
-                                            showToast(
-                                                    R.string.error_unable_to_download_translations_and_configuration_files);
-                                            break;
-                                    }
-
-                                    mDashboardActivity.finishAndGo(LoginActivity.class);
-                                }
-                            });
-
-            downloadedUseCase.run();
-        }
-
-        mGetUrlForWebViewsUseCase = new GetUrlForWebViewsUseCase(mDashboardActivity,
-                iCredentialsRepository);
+        credentials = iCredentialsRepository.getLastValidCredentials();
 
         IAsyncExecutor asyncExecutor = new AsyncExecutor();
         IMainExecutor mainExecutor = new UIThreadExecutor();
@@ -167,12 +132,49 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         ISettingsRepository settingsRepository = new SettingsDataSource(mDashboardActivity);
         mDownloadMediaUseCase = new DownloadMediaUseCase(asyncExecutor, mainExecutor,
                 fileDownloader,
-                mConnectivity, programRepository, mediaRepository,settingsRepository);
+                mConnectivity, programRepository, mediaRepository, settingsRepository);
+
+        mSettingUseCase = new GetSettingsUseCase(mainExecutor, asyncExecutor, settingsRepository);
+
+
+        View actionBarLayout = mDashboardActivity.getSupportActionBar().getCustomView();
+        mRefreshButton = actionBarLayout.findViewById(R.id.refresh_push);
+        enableDisableRefreshButton();
+        mRefreshButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                launchPush();
+            }
+        });
+
+    }
+
+    private void enableDisableRefreshButton() {
+        mRefreshButton.setEnabled(false);
+        GetAppInfoUseCase getAppInfoUseCase =
+                new AppInfoFactory().getGetAppInfoUseCase(mDashboardActivity);
+        getAppInfoUseCase.execute(new GetAppInfoUseCase.Callback() {
+            @Override
+            public void onAppInfoLoaded(AppInfo appInfo) {
+                boolean canMakeManualPush = appInfo.canMakeManualPush();
+                mRefreshButton.setEnabled(canMakeManualPush);
+                if (!canMakeManualPush) {
+                    waitToEnableRefreshButton(mDashboardActivity);
+                }
+            }
+        });
+    }
+
+    private void launchPush() {
+
+        Intent pushIntent = new Intent(mDashboardActivity, PushService.class);
+        pushIntent.putExtra(SurveyService.SERVICE_METHOD, PushService.PENDING_SURVEYS_ACTION);
+        PushService.enqueueWork(mDashboardActivity, pushIntent);
     }
 
     private void showToast(@StringRes int text) {
         Toast.makeText(mDashboardActivity.getApplicationContext(),
-                Utils.getInternationalizedString(text, mDashboardActivity),
+                translate(text),
                 Toast.LENGTH_LONG).show();
     }
 
@@ -198,26 +200,22 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         } else {
             showStockFragment(activity, false);
         }
+
+        mDashboardActivity.setCurrentFragment(closeFragment);
     }
 
     @Override
     public boolean showStockFragment(Activity activity, boolean isMoveToLeft) {
-        mGetUrlForWebViewsUseCase.execute(GetUrlForWebViewsUseCase.CLOSED_TYPE,
-                new GetUrlForWebViewsUseCase.Callback() {
-                    @Override
-                    public void onGetUrl(String url) {
-                        closeFragment = new WebViewFragment();
-                        Bundle bundle = mDashboardActivity.getIntent().getExtras() != null
-                                ? mDashboardActivity.getIntent().getExtras() : new Bundle();
-                        bundle.putString(WebViewFragment.WEB_VIEW_URL, url);
-                        bundle.putInt(WebViewFragment.TITLE, R.string.tab_tag_improve);
-                        closeFragment.setArguments(bundle);
-                        closeFragment.reloadData();
-                        closeFragment.hideHeader();
-                        mDashboardActivity.replaceFragment(R.id.dashboard_stock_container,
-                                closeFragment);
-                    }
-                });
+        closeFragment = new WebViewFragment();
+        mSettingUseCase.execute(new GetSettingsUseCase.Callback() {
+            @Override
+            public void onSuccess(Settings setting) {
+                String webViewFragmentUrl = getWebviewUrl(R.string.url_closed_fragment);
+                String url = getFormattedUrl(setting.getWebUrl(), webViewFragmentUrl);
+                loadFragment(url, closeFragment, R.id.dashboard_stock_container,
+                        R.string.tab_tag_improve);
+            }
+        });
         return isMoveToLeft;
     }
 
@@ -233,8 +231,7 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
                 if (userAccount.canAddSurveys()) {
                     openNewSurvey(activity);
                 } else {
-                    showToast(Utils.getInternationalizedString(R.string.new_survey_disable,
-                            activity));
+                    showToast(translate(R.string.new_survey_disable));
                 }
             }
         });
@@ -252,17 +249,6 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         mDashboardActivity.initSurvey();
     }
 
-    private void openUncompletedSurvey() {
-        SurveyDB survey;
-        List<SurveyDB> uncompletedSurveys = SurveyDB.getAllUncompletedSurveys();
-        if (!uncompletedSurveys.isEmpty()) {
-            survey = uncompletedSurveys.get(uncompletedSurveys.size() - 1);
-            Session.setMalariaSurveyDB(survey);
-            //Look for coordinates
-            prepareLocationListener(mDashboardActivity, survey);
-            mDashboardActivity.initSurvey();
-        }
-    }
 
     @Override
     public void sendSurvey() {
@@ -312,16 +298,16 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     @Override
     public void showFirstFragment() {
-        mDashboardUnsentFragment = new DashboardUnsentFragment();
-        mDashboardUnsentFragment.setArguments(mDashboardActivity.getIntent().getExtras());
-        mDashboardUnsentFragment.reloadData();
-        mDashboardUnsentFragment.reloadHeader(mDashboardActivity);
+        surveysFragment = new SurveysFragment();
+        surveysFragment.setArguments(mDashboardActivity.getIntent().getExtras());
+        surveysFragment.reloadData();
+        surveysFragment.reloadHeader(mDashboardActivity);
 
         FragmentTransaction ft = mDashboardActivity.getFragmentManager().beginTransaction();
         ft.setCustomAnimations(R.animator.anim_slide_in_left, R.animator.anim_slide_out_left);
 
         ft.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE);
-        ft.replace(R.id.dashboard_details_container, mDashboardUnsentFragment);
+        ft.replace(R.id.dashboard_details_container, surveysFragment);
 
         ft.commit();
         if (BuildConfig.translations) {
@@ -332,38 +318,34 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     @Override
     public void reloadFirstFragment() {
-        if (mDashboardUnsentFragment.isAdded()) {
-            mDashboardUnsentFragment.reloadData();
+        if (surveysFragment.isAdded()) {
+            surveysFragment.reloadData();
         } else {
             showFirstFragment();
         }
+
+        mDashboardActivity.setCurrentFragment(surveysFragment);
     }
 
     @Override
     public void reloadFirstFragmentHeader() {
-        if(!DashboardActivity.dashboardActivity.isSurveyFragmentActive()) {
-            mDashboardUnsentFragment.reloadHeader(mDashboardActivity);
+        if (!DashboardActivity.dashboardActivity.isSurveyFragmentActive()) {
+            surveysFragment.reloadHeader(mDashboardActivity);
         }
     }
 
     @Override
     public void showSecondFragment() {
-        mGetUrlForWebViewsUseCase.execute(GetUrlForWebViewsUseCase.OPEN_TYPE,
-                new GetUrlForWebViewsUseCase.Callback() {
-                    @Override
-                    public void onGetUrl(String url) {
-                        openFragment = new WebViewFragment();
-                        Bundle bundle = mDashboardActivity.getIntent().getExtras() != null
-                                ? mDashboardActivity.getIntent().getExtras() : new Bundle();
-                        bundle.putString(WebViewFragment.WEB_VIEW_URL, url);
-                        bundle.putInt(WebViewFragment.TITLE, R.string.tab_tag_assess);
-                        openFragment.setArguments(bundle);
-                        openFragment.reloadData();
-                        openFragment.hideHeader();
-                        mDashboardActivity.replaceFragment(R.id.dashboard_completed_container,
-                                openFragment);
-                    }
-                });
+        openFragment = new WebViewFragment();
+        mSettingUseCase.execute(new GetSettingsUseCase.Callback() {
+            @Override
+            public void onSuccess(Settings setting) {
+                String webViewFragmentUrl = getWebviewUrl(R.string.url_open_fragment);
+                String url = getFormattedUrl(setting.getWebUrl(), webViewFragmentUrl);
+                loadFragment(url, openFragment, R.id.dashboard_completed_container,
+                        R.string.tab_tag_assess);
+            }
+        });
     }
 
     @Override
@@ -374,26 +356,48 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         } else {
             showSecondFragment();
         }
+
+        mDashboardActivity.setCurrentFragment(openFragment);
     }
 
     @Override
     public void showAVFragment() {
-        mGetUrlForWebViewsUseCase.execute(GetUrlForWebViewsUseCase.STATUS_TYPE,
-                new GetUrlForWebViewsUseCase.Callback() {
-                    @Override
-                    public void onGetUrl(String url) {
-                        statusFragment = new WebViewFragment();
-                        Bundle bundle = mDashboardActivity.getIntent().getExtras() != null
-                                ? mDashboardActivity.getIntent().getExtras() : new Bundle();
-                        bundle.putString(WebViewFragment.WEB_VIEW_URL, url);
-                        bundle.putInt(WebViewFragment.TITLE, R.string.tab_tag_monitor);
-                        statusFragment.setArguments(bundle);
-                        statusFragment.reloadData();
-                        mDashboardActivity.replaceFragment(R.id.dashboard_av_container,
-                                statusFragment);
-                        statusFragment.hideHeader();
-                    }
-                });
+        statusFragment = new WebViewFragment();
+        mSettingUseCase.execute(new GetSettingsUseCase.Callback() {
+            @Override
+            public void onSuccess(Settings setting) {
+                String webViewFragmentUrl = getWebviewUrl(R.string.url_status_fragment);
+                String url = getFormattedUrl(setting.getWebUrl(), webViewFragmentUrl);
+                loadFragment(url, statusFragment, R.id.dashboard_av_container,
+                        R.string.tab_tag_monitor);
+            }
+        });
+    }
+
+    private void loadFragment(String url, WebViewFragment fragment, int container, int tabTag) {
+        Bundle bundle = mDashboardActivity.getIntent().getExtras() != null
+                ? mDashboardActivity.getIntent().getExtras() : new Bundle();
+        bundle.putString(WebViewFragment.WEB_VIEW_URL, url);
+        bundle.putInt(WebViewFragment.TITLE, tabTag);
+        fragment.setArguments(bundle);
+        fragment.reloadData();
+        mDashboardActivity.replaceFragment(container,
+                fragment);
+        fragment.hideHeader();
+    }
+
+    private String getFormattedUrl(String settingsWebUrl, String webViewUrl) {
+        return String.format(settingsWebUrl + mDashboardActivity.getString(
+                R.string.composed_web_view_url), webViewUrl, credentials.getUsername(),
+                credentials.getPassword(), getUserLanguageOrDefault(mDashboardActivity));
+    }
+
+    private String getWebviewUrl(int valueId) {
+        if (credentials != null && credentials.isDemoCredentials()) {
+            return null;
+        } else {
+            return mDashboardActivity.getString(valueId);
+        }
     }
 
     @Override
@@ -411,6 +415,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         }
         mDashboardActivity.replaceFragment(R.id.dashboard_charts_container, avFragment);
         avFragment.hideHeader();
+
+        mDashboardActivity.setCurrentFragment(avFragment);
     }
 
     @Override
@@ -421,8 +427,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     @Override
     public void showUnsentFragment() {
         mDashboardActivity.replaceFragment(R.id.dashboard_details_container,
-                mDashboardUnsentFragment);
-        mDashboardUnsentFragment.reloadHeader(mDashboardActivity);
+                surveysFragment);
+        surveysFragment.reloadHeader(mDashboardActivity);
     }
 
     @Override
@@ -527,8 +533,8 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
                     downloadMedia();
                 } else {
                     Toast.makeText(mDashboardActivity.getApplicationContext(),
-                            Utils.getInternationalizedString(
-                                    R.string.google_play_required, mDashboardActivity),
+                            translate(
+                                    R.string.google_play_required),
                             Toast.LENGTH_LONG);
                 }
                 break;
@@ -537,19 +543,23 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         externalVoucherSenderResultTreatment(requestCode, resultCode, data);
     }
 
-    private void externalVoucherSenderResultTreatment(int requestCode, int resultCode, Intent data) {
-        IExternalVoucherRegistry elementController = new ElementController(DashboardActivity.dashboardActivity);
-        TreatExternalAppResultUseCase treatExternalAppResultUseCase = new TreatExternalAppResultUseCase(elementController, new IExternalVoucherRegistry.Callback() {
-            @Override
-            public void onSuccess() {
-                Log.d(TAG, "User created");
-            }
+    private void externalVoucherSenderResultTreatment(int requestCode, int resultCode,
+            Intent data) {
+        IExternalVoucherRegistry elementController = new ElementController(
+                DashboardActivity.dashboardActivity);
+        TreatExternalAppResultUseCase treatExternalAppResultUseCase =
+                new TreatExternalAppResultUseCase(elementController,
+                        new IExternalVoucherRegistry.Callback() {
+                            @Override
+                            public void onSuccess() {
+                                Log.d(TAG, "User created");
+                            }
 
-            @Override
-            public void onError() {
-                Log.d(TAG, "User is not created");
-            }
-        });
+                            @Override
+                            public void onError() {
+                                Log.d(TAG, "User is not created");
+                            }
+                        });
         treatExternalAppResultUseCase.execute(requestCode, resultCode, data);
     }
 
@@ -561,25 +571,28 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         } else {
             showAVFragment();
         }
+
+        mDashboardActivity.setCurrentFragment(statusFragment);
     }
 
     public void showEndSurveyMessage(SurveyDB surveyDB) {
         if (surveyDB != null && !noIssueVoucher(surveyDB) && !hasPhone(surveyDB)) {
             final String voucherUId = surveyDB.getVoucherUid();
 
-            GetSettingsUseCase getSettingsUseCase = new GetSettingsUseCase(new UIThreadExecutor(), new AsyncExecutor(),
+            GetSettingsUseCase getSettingsUseCase = new GetSettingsUseCase(new UIThreadExecutor(),
+                    new AsyncExecutor(),
                     new SettingsDataSource(mDashboardActivity.getBaseContext()));
             getSettingsUseCase.execute(new GetSettingsUseCase.Callback() {
                 @Override
                 public void onSuccess(Settings setting) {
                     DialogInterface.OnClickListener onClickListener = null;
-                    if(setting.isElementActive()){
-                        onClickListener = createOnClickListenerToSendVoucherToExternalApp(voucherUId, mDashboardActivity);
+                    if (setting.isElementActive()) {
+                        onClickListener = createOnClickListenerToSendVoucherToExternalApp(
+                                voucherUId, mDashboardActivity);
                     }
 
                     mDashboardActivity.showException(mDashboardActivity, "", String.format(
-                            Utils.getInternationalizedString(R.string.give_voucher,
-                                    mDashboardActivity),
+                            translate(R.string.give_voucher),
                             voucherUId), onClickListener);
                 }
             });
@@ -587,22 +600,24 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     }
 
     @NonNull
-    private DialogInterface.OnClickListener createOnClickListenerToSendVoucherToExternalApp(final String voucherUId, final Context context) {
+    private DialogInterface.OnClickListener createOnClickListenerToSendVoucherToExternalApp(
+            final String voucherUId, final Context context) {
         return new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
                 IExternalVoucherRegistry elementController = new ElementController(context);
                 AsyncExecutor mAsyncExecutor = new AsyncExecutor();
                 UIThreadExecutor mMainExecutor = new UIThreadExecutor();
-                SendToExternalAppPaperVoucherUseCase elementSentVoucherUseCase = new SendToExternalAppPaperVoucherUseCase(mMainExecutor, mAsyncExecutor,
-                        elementController, new IExternalVoucherRegistry.SenderCallback() {
-                    @Override
-                    public void onNotInstalledApp() {
-                        Toast.makeText(context,
-                                Utils.getInternationalizedString(R.string.element_not_installed,
-                                        context), Toast.LENGTH_LONG).show();
-                    }
-                });
+                SendToExternalAppPaperVoucherUseCase elementSentVoucherUseCase =
+                        new SendToExternalAppPaperVoucherUseCase(mMainExecutor, mAsyncExecutor,
+                                elementController, new IExternalVoucherRegistry.SenderCallback() {
+                            @Override
+                            public void onNotInstalledApp() {
+                                Toast.makeText(context,
+                                        translate(R.string.element_not_installed),
+                                        Toast.LENGTH_LONG).show();
+                            }
+                        });
                 elementSentVoucherUseCase.execute(voucherUId);
             }
         };
@@ -610,12 +625,12 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     private boolean noIssueVoucher(SurveyDB survey) {
         OptionDB noIssueOption = survey.getOptionSelectedForQuestionCode(
-                Utils.getInternationalizedString(R.string.issue_voucher_qc, mDashboardActivity));
+                translate(R.string.issue_voucher_qc));
         if (noIssueOption == null) {
             return false;
         }
         return noIssueOption.getName().equals(
-                Utils.getInternationalizedString(R.string.no_voucher_on, mDashboardActivity));
+                translate(R.string.no_voucher_on));
     }
 
     private boolean hasPhone(SurveyDB survey) {
@@ -661,22 +676,24 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     private BroadcastReceiver pushReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            showHideProgressPush(intent);
-            mDashboardUnsentFragment.reloadData();
+            managePushIntent(intent);
+            surveysFragment.reloadData();
         }
     };
 
-    private void showHideProgressPush(Intent intent) {
-        View actionBarLayout = mDashboardActivity.getSupportActionBar().getCustomView();
-        ImageView refreshPush = (ImageView) actionBarLayout.findViewById(R.id.refresh_push);
+    private void managePushIntent(Intent intent) {
         if (intent.getBooleanExtra(PushServiceStrategy.PUSH_IS_START, false)) {
-            refreshPush.setVisibility(View.VISIBLE);
-            refreshPush.startAnimation(
-                    AnimationUtils.loadAnimation(refreshPush.getContext(),
+            mRefreshButton.setEnabled(false);
+            mRefreshButton.startAnimation(
+                    AnimationUtils.loadAnimation(mRefreshButton.getContext(),
                             R.anim.rotate_center));
+            waitToEnableRefreshButton(mDashboardActivity);
         } else {
-            refreshPush.clearAnimation();
-            refreshPush.setVisibility(View.GONE);
+            mRefreshButton.clearAnimation();
+        }
+
+        if (intent.getBooleanExtra(PushServiceStrategy.PUSH_NETWORK_ERROR, false)) {
+            showError(R.string.push_network_error);
         }
     }
 
@@ -688,11 +705,43 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
 
     }
 
-    @Override
-    public void onStart() {
+    public void openPendingSurveyIfRequired() {
         if (Session.hasSurveyToComplete()) {
             openUncompletedSurvey();
             Session.setHasSurveyToComplete(false);
         }
+    }
+
+    private void openUncompletedSurvey() {
+        SurveyDB survey;
+        List<SurveyDB> uncompletedSurveys = SurveyDB.getAllUncompletedSurveys();
+        if (!uncompletedSurveys.isEmpty()) {
+            survey = uncompletedSurveys.get(uncompletedSurveys.size() - 1);
+            Session.setMalariaSurveyDB(survey);
+            //Look for coordinates
+            prepareLocationListener(mDashboardActivity, survey);
+            mDashboardActivity.initSurvey();
+        }
+    }
+
+
+    private void waitToEnableRefreshButton(Context context) {
+        long pushPeriod = Long.parseLong(context.getString(R.string.ENABLE_MANUAL_PUSH_PERIOD));
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                enableDisableRefreshButton();
+            }
+        };
+        new Handler().postDelayed(runnable, pushPeriod * SECONDS);
+    }
+
+    public void showError(int message) {
+        Toast.makeText(mDashboardActivity, translate(message),
+                Toast.LENGTH_LONG).show();
+    }
+
+    private String translate(@StringRes int resourceId) {
+        return mDashboardActivity.translate(resourceId);
     }
 }

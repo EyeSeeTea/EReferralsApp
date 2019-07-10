@@ -35,6 +35,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.NonNull;
+import android.support.annotation.StringRes;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.view.Gravity;
@@ -55,6 +56,7 @@ import org.eyeseetea.malariacare.domain.usecase.RemoveSurveysInProgressUseCase;
 import org.eyeseetea.malariacare.factories.AuthenticationFactoryStrategy;
 import org.eyeseetea.malariacare.fragments.ReviewFragment;
 import org.eyeseetea.malariacare.fragments.SurveyFragment;
+import org.eyeseetea.malariacare.fragments.WebViewFragment;
 import org.eyeseetea.malariacare.layout.adapters.survey.DynamicTabAdapter;
 import org.eyeseetea.malariacare.layout.score.ScoreRegister;
 import org.eyeseetea.malariacare.layout.utils.LayoutUtils;
@@ -341,6 +343,19 @@ public class DashboardActivity extends BaseActivity {
     }
 
 
+    private Fragment currentFragment;
+
+    public Fragment getCurrentFragment() {
+        return currentFragment;
+    }
+
+    public void setCurrentFragment(Fragment fragment) {
+        //TODO: with view pager this manual management of visibility would be no necessary
+        changeFragmentVisibilityFlag(currentFragment, false);
+        currentFragment = fragment;
+        changeFragmentVisibilityFlag(currentFragment, true);
+    }
+
     // Add the fragment to the activity, pushing this transaction
     // on to the back stack.
     public void replaceFragment(int layout, Fragment fragment) {
@@ -349,9 +364,22 @@ public class DashboardActivity extends BaseActivity {
         ft.commit();
     }
 
+    private void changeFragmentVisibilityFlag(Fragment fragment, boolean isVisible) {
+        if (fragment != null && fragment instanceof WebViewFragment) {
+            WebViewFragment webViewFragment = (WebViewFragment) fragment;
+
+            webViewFragment.changeVisibility(isVisible);
+        }
+    }
+
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         //No call for super(). Bug on API Level > 11.
+    }
+
+    @Override
+    public void openPendingSurveyIfRequired() {
+        mDashboardActivityStrategy.openPendingSurveyIfRequired();
     }
 
     public void replaceListFragment(int layout, ListFragment fragment) {
@@ -469,13 +497,12 @@ public class DashboardActivity extends BaseActivity {
     public void confirmExitApp() {
         Log.d(TAG, "back pressed");
         new AlertDialog.Builder(this)
-                .setTitle(Utils.getInternationalizedString(R.string.confirmation_really_exit_title,
-                        this))
+                .setTitle(translate(R.string.confirmation_really_exit_title))
                 .setMessage(
-                        Utils.getInternationalizedString(R.string.confirmation_really_exit, this))
-                .setNegativeButton(Utils.getInternationalizedString(android.R.string.no, this),
+                        translate(R.string.confirmation_really_exit))
+                .setNegativeButton(translate(android.R.string.no),
                         null)
-                .setPositiveButton(Utils.getInternationalizedString(android.R.string.yes, this),
+                .setPositiveButton(translate(android.R.string.yes),
                         new DialogInterface.OnClickListener() {
 
                     public void onClick(DialogInterface arg0, int arg1) {
@@ -497,8 +524,8 @@ public class DashboardActivity extends BaseActivity {
             int infoMessage = surveyDB.isInProgress() ? R.string.survey_info_exit_delete
                     : R.string.survey_info_exit;
             new AlertDialog.Builder(this)
-                    .setTitle(Utils.getInternationalizedString(R.string.survey_info_exit, this))
-                    .setMessage(Utils.getInternationalizedString(infoMessage, this))
+                    .setTitle(translate(R.string.survey_info_exit))
+                    .setMessage(translate(infoMessage))
                     .setNegativeButton(android.R.string.no, null)
                     .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog, int arg1) {
@@ -551,6 +578,8 @@ public class DashboardActivity extends BaseActivity {
             showUnsentFragment();
             mDashboardActivityStrategy.reloadFirstFragment();
         }
+
+        super.surveyClosed();
     }
 
     public void closeReceiptBalanceFragment() {
@@ -653,10 +682,10 @@ public class DashboardActivity extends BaseActivity {
 
     private void showSendSurveyDialog() {
         AlertDialog.Builder msgConfirmation = new AlertDialog.Builder(this)
-                .setTitle(Utils.getInternationalizedString(R.string.survey_completed, this))
-                .setMessage(Utils.getInternationalizedString(R.string.survey_completed_text, this))
+                .setTitle(translate(R.string.survey_completed))
+                .setMessage(translate(R.string.survey_completed_text))
                 .setCancelable(false)
-                .setPositiveButton(Utils.getInternationalizedString(R.string.survey_send, this),
+                .setPositiveButton(translate(R.string.survey_send),
                         new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int arg1) {
                         sendSurvey();
@@ -664,7 +693,7 @@ public class DashboardActivity extends BaseActivity {
                     }
                 });
         msgConfirmation.setNegativeButton(
-                Utils.getInternationalizedString(R.string.survey_review, this),
+                translate(R.string.survey_review),
                 new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int arg1) {
                         reviewSurvey();
@@ -760,6 +789,7 @@ public class DashboardActivity extends BaseActivity {
         mDashboardActivityStrategy.completeSurvey();
         closeSurveyFragment();
     }
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -869,5 +899,9 @@ public class DashboardActivity extends BaseActivity {
 
     public TabHost getTabHost() {
         return tabHost;
+    }
+
+    public String translate(@StringRes int id){
+        return Utils.getInternationalizedString(id, this);
     }
 }

@@ -20,11 +20,18 @@ public class Settings {
     private String user;
     private String pass;
     private String programUrl;
+    private String programEndPoint;
+    private boolean softLoginRequired;
+    private boolean pullRequired;
+    private String wsVersion;
+    private boolean surveyJumpingActive;
 
     public Settings(String systemLanguage, String currentLanguage,
             MediaListMode mediaListMode, boolean canDownloadWith3G, boolean isElementActive,
                     boolean isMetadataUpdateActive, String user, String pass, String wsServerUrl,
-            String webUrl, String fontSize, String programUrl) {
+            String webUrl, String fontSize, String programUrl, String programEndPoint,
+            boolean softLoginRequired, boolean pullRequired, String wsVersion,
+            boolean surveyJumpingActive) {
         this.systemLanguage = required(systemLanguage, "systemLanguage is required");
         this.currentLanguage = currentLanguage;
         this.mediaListMode = mediaListMode;
@@ -37,6 +44,11 @@ public class Settings {
         this.webUrl = webUrl;
         this.fontSize = fontSize;
         this.programUrl = programUrl;
+        this.programEndPoint = programEndPoint;
+        this.wsVersion = wsVersion;
+        this.softLoginRequired = softLoginRequired;
+        this.pullRequired = pullRequired;
+        this.surveyJumpingActive = surveyJumpingActive;
     }
 
     public String getLanguage() {
@@ -97,11 +109,55 @@ public class Settings {
         return webUrl;
     }
 
+    public String getWsVersion() {
+        return wsVersion;
+    }
+
     public String getFontSize() {
         return fontSize;
     }
 
     public String getProgramUrl() {
         return programUrl;
+    }
+
+    public String getProgramEndPoint() {
+        return programEndPoint;
+    }
+
+    public void setProgramUrl(String value) {
+        programUrl = value;
+    }
+
+    public void setProgramEndPoint(String value) {
+        programEndPoint = value;
+    }
+
+    public void setWebUrl(String value) {
+        webUrl = value;
+    }
+
+    public boolean isSoftLoginRequired() {
+        return softLoginRequired;
+    }
+
+    public void changeSoftLoginRequired(boolean isRequired) {
+        softLoginRequired = isRequired;
+    }
+
+    public boolean isPullRequired() {
+        return pullRequired;
+    }
+
+    public void changePullRequired(boolean isRequired) {
+        pullRequired = isRequired;
+    }
+
+    public boolean isSurveyJumpingActive() {
+        return surveyJumpingActive;
+    }
+
+    public void setSurveyJumpingActive(boolean surveyJumpingActive) {
+        this.surveyJumpingActive = surveyJumpingActive;
     }
 }

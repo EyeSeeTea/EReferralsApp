@@ -12,6 +12,7 @@ import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Spinner;
+import android.widget.TextView;
 
 import org.eyeseetea.malariacare.BuildConfig;
 import org.eyeseetea.malariacare.R;
@@ -55,6 +56,7 @@ public class DropdownWithFilterMultiQuestionView extends AOptionQuestionView imp
 
     @Override
     public void requestAnswerFocus() {
+        showDialog(getContext());
     }
 
     @Override
@@ -92,6 +94,7 @@ public class DropdownWithFilterMultiQuestionView extends AOptionQuestionView imp
         inflate(context, R.layout.multi_question_tab_spinner_with_filter_row, this);
         header = (CustomTextView) findViewById(R.id.row_header_text);
         spinnerAsButton = (Spinner) findViewById(R.id.answer);
+
         if(isEnabled()){
             spinnerAsButton.setOnTouchListener(new OnTouchListener(context));
         }
@@ -204,8 +207,11 @@ public class DropdownWithFilterMultiQuestionView extends AOptionQuestionView imp
         Window window = alertDialog.getWindow();
         window.setLayout(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
         window.setGravity(Gravity.TOP);
-        listView = (ListView) dialog.findViewById(R.id.listView);
-        EditText editText = (EditText) dialog.findViewById(R.id.filter);
+        listView = dialog.findViewById(R.id.listView);
+        TextView headerDialog = dialog.findViewById(R.id.questionHeader);
+        headerDialog.setText(header.getText().toString());
+
+        EditText editText = dialog.findViewById(R.id.filter);
         editText.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {

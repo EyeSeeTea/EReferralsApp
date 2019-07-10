@@ -26,6 +26,9 @@ import android.support.multidex.MultiDex;
 import android.util.Log;
 
 import com.crashlytics.android.Crashlytics;
+import com.github.stkent.bugshaker.BugShaker;
+import com.github.stkent.bugshaker.flow.dialog.AlertDialogType;
+import com.github.stkent.bugshaker.github.GitHubConfiguration;
 import com.raizlabs.android.dbflow.config.EyeSeeTeaGeneratedDatabaseHolder;
 import com.raizlabs.android.dbflow.config.FlowConfig;
 import com.raizlabs.android.dbflow.config.FlowLog;
@@ -34,7 +37,9 @@ import com.raizlabs.android.dbflow.config.FlowManager;
 import org.eyeseetea.malariacare.data.database.utils.PreferencesState;
 import org.eyeseetea.malariacare.strategies.AEyeSeeTeaApplicationStrategy;
 import org.eyeseetea.malariacare.strategies.EyeSeeTeaApplicationStrategy;
+import org.eyeseetea.malariacare.utils.DBTranslator;
 import org.eyeseetea.malariacare.utils.Permissions;
+import org.eyeseetea.sdk.common.EyeSeeTeaSdk;
 
 import io.fabric.sdk.android.Fabric;
 
@@ -78,6 +83,12 @@ public class EyeSeeTeaApplication extends Application {
                 .addDatabaseHolder(EyeSeeTeaGeneratedDatabaseHolder.class)
                 .build();
         FlowManager.init(flowConfig);
+        initBugShaker();
+        initEyeSeeTeaSDK();
+    }
+
+    private void initEyeSeeTeaSDK() {
+        EyeSeeTeaSdk.getInstance().init(new DBTranslator());
     }
 
     @Override
@@ -125,5 +136,19 @@ public class EyeSeeTeaApplication extends Application {
 
     public void setIsBackPressed(boolean isBackPressed) {
         EyeSeeTeaApplication.isBackPressed = isBackPressed;
+    }
+
+    private void initBugShaker() {
+        BugShaker.get(this)
+                .setEmailAddresses("someone@example.com")
+                .setLoggingEnabled(BuildConfig.DEBUG)
+                .setAlertDialogType(AlertDialogType.APP_COMPAT)
+                .setGitHubInfo(new GitHubConfiguration(
+                        "eyeseetea/EReferralsApp",
+                        BuildConfig.GIT_HUB_BOT_TOKEN,
+                        "eyeseeteabottest/snapshots",
+                        "master"))
+                .assemble()
+                .start();
     }
 }

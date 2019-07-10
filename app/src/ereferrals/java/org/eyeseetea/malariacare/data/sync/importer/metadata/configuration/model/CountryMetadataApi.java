@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class MetadataConfigurationsApi {
+public class CountryMetadataApi {
 
     @JsonProperty("issuing_capture")
     public IssuingCapture issuingCapture;
@@ -64,6 +64,9 @@ public class MetadataConfigurationsApi {
 
         @JsonProperty("mandatory")
         public boolean compulsory = true;
+
+        @JsonProperty("disabled")
+        public boolean disabled = false;
 
         @JsonProperty("options")
         public List<Option> options;

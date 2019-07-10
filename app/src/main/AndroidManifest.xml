@@ -36,6 +36,7 @@
             android:exported="false" />
         <service
             android:name=".services.PushService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false" />
 
         <meta-data
@@ -76,8 +77,7 @@
         <activity
             android:name=".SplashScreenActivity"
             android:configChanges="orientation|screenSize"
-            android:label="@string/malaria_case_based_reporting"
-            android:theme="@style/SplashTheme">
+            android:label="@string/malaria_case_based_reporting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

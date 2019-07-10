@@ -9,7 +9,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'io.fabric.tools:gradle:1.+'
+        classpath 'io.fabric.tools:gradle:1.27.1'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.4'
         classpath 'com.neenbedankt.gradle.plugins:android-apt:1.8'
         classpath 'com.google.gms:google-services:3.0.0'
@@ -203,7 +203,7 @@ android {
         }
         ereferrals {
             applicationId 'org.eyeseetea.surveillance_ref'
-            versionName "1.3.2"
+            versionName "1.4.3"
             buildConfigField "boolean", "downloadLanguagesFromServer", "true"
             buildConfigField "boolean", "activeMonitoringFragment", "true"
             buildConfigField "boolean", "reviewScreen", "true"
@@ -351,6 +351,7 @@ dependencies {
 
     // Unit testing dependencies
     testCompile "junit:junit:${libs.jUnitVersion}"
+    testCompile "org.mockito:mockito-core:${libs.mockitoVersion}"
     testCompile "com.squareup.okhttp3:mockwebserver:${libs.mockwebserverVersion}"
 
     // Instrumented tests dependencies
@@ -380,10 +381,10 @@ dependencies {
     compile "com.squareup:javapoet:${libs.javapoetVersion}"
 
     //DBFlow
-    apt "com.github.Raizlabs.DBFlow:dbflow-processor:${libs.dbFlowVersion}"
-    compile "com.github.Raizlabs.DBFlow:dbflow:${libs.dbFlowVersion}"
-    compile "com.github.Raizlabs.DBFlow:dbflow-core:${libs.dbFlowVersion}"
-    compile "com.github.Raizlabs.DBFlow:dbflow-sqlcipher:${libs.dbFlowVersion}"
+    apt "com.github.agrosner.dbflow:dbflow-processor:${libs.dbFlowVersion}"
+    compile "com.github.agrosner.dbflow:dbflow:${libs.dbFlowVersion}"
+    compile "com.github.agrosner.dbflow:dbflow-core:${libs.dbFlowVersion}"
+    compile "com.github.agrosner.dbflow:dbflow-sqlcipher:${libs.dbFlowVersion}"
     compile(project(path: ':bugshaker')) {
         exclude group: "com.google.android.gms"
     }
