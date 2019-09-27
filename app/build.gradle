@@ -203,7 +203,7 @@ android {
         }
         ereferrals {
             applicationId 'org.eyeseetea.surveillance_ref_dev'
-            versionName "1.4.3"
+            versionName "1.4.4"
             buildConfigField "boolean", "downloadLanguagesFromServer", "true"
             buildConfigField "boolean", "activeMonitoringFragment", "true"
             buildConfigField "boolean", "reviewScreen", "true"
@@ -384,7 +384,6 @@ dependencies {
     apt "com.github.agrosner.dbflow:dbflow-processor:${libs.dbFlowVersion}"
     compile "com.github.agrosner.dbflow:dbflow:${libs.dbFlowVersion}"
     compile "com.github.agrosner.dbflow:dbflow-core:${libs.dbFlowVersion}"
-    compile "com.github.agrosner.dbflow:dbflow-sqlcipher:${libs.dbFlowVersion}"
     compile(project(path: ':bugshaker')) {
         exclude group: "com.google.android.gms"
     }
