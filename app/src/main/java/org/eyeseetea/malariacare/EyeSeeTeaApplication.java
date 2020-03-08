@@ -83,7 +83,7 @@ public class EyeSeeTeaApplication extends Application {
                 .addDatabaseHolder(EyeSeeTeaGeneratedDatabaseHolder.class)
                 .build();
         FlowManager.init(flowConfig);
-        initBugShaker();
+        //initBugShaker();
         initEyeSeeTeaSDK();
     }
 
