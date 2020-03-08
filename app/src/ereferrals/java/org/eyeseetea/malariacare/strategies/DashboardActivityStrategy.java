@@ -4,9 +4,12 @@ import static org.eyeseetea.malariacare.utils.Utils.getUserLanguageOrDefault;
 
 import android.app.Activity;
 import android.app.AlarmManager;
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.FragmentTransaction;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -60,12 +63,12 @@ import org.eyeseetea.malariacare.domain.boundary.repositories.IUserRepository;
 import org.eyeseetea.malariacare.domain.entity.AppInfo;
 import org.eyeseetea.malariacare.domain.entity.Credentials;
 import org.eyeseetea.malariacare.domain.entity.Settings;
+import org.eyeseetea.malariacare.domain.entity.Survey;
 import org.eyeseetea.malariacare.domain.entity.UserAccount;
 import org.eyeseetea.malariacare.domain.exception.LoadingNavigationControllerException;
 import org.eyeseetea.malariacare.domain.exception.NetworkException;
 import org.eyeseetea.malariacare.domain.exception.NoFilesException;
-import org.eyeseetea.malariacare.domain.identifiers.CodeGenerator;
-import org.eyeseetea.malariacare.domain.identifiers.UIDGenerator;
+import org.eyeseetea.malariacare.domain.usecase.CompletionSurveyUseCase;
 import org.eyeseetea.malariacare.domain.usecase.DownloadMediaUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetAppInfoUseCase;
 import org.eyeseetea.malariacare.domain.usecase.GetSettingsUseCase;
@@ -73,6 +76,7 @@ import org.eyeseetea.malariacare.domain.usecase.GetUserUserAccountUseCase;
 import org.eyeseetea.malariacare.domain.usecase.SendToExternalAppPaperVoucherUseCase;
 import org.eyeseetea.malariacare.domain.usecase.TreatExternalAppResultUseCase;
 import org.eyeseetea.malariacare.factories.AppInfoFactory;
+import org.eyeseetea.malariacare.factories.SurveyFactory;
 import org.eyeseetea.malariacare.fragments.AVFragment;
 import org.eyeseetea.malariacare.fragments.SurveysFragment;
 import org.eyeseetea.malariacare.fragments.WebViewFragment;
@@ -86,7 +90,6 @@ import org.eyeseetea.malariacare.services.strategies.PushServiceStrategy;
 import org.eyeseetea.malariacare.utils.Constants;
 
 import java.io.File;
-import java.util.Date;
 import java.util.List;
 
 public class DashboardActivityStrategy extends ADashboardActivityStrategy {
@@ -250,19 +253,6 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     }
 
 
-    @Override
-    public void sendSurvey() {
-        SurveyDB malariaSurvey = Session.getMalariaSurveyDB();
-        malariaSurvey.updateSurveyStatus();
-        if (malariaSurvey.isCompleted() && malariaSurvey.getEventUid() == null) {
-            UIDGenerator uidGenerator = new UIDGenerator();
-            malariaSurvey.setEventUid(CodeGenerator.generateCode());
-            malariaSurvey.setVoucherUid(String.valueOf(uidGenerator.generateUID()));
-            malariaSurvey.setEventDate(new Date(uidGenerator.getTimeGeneratedUID()));
-            malariaSurvey.save();
-            showEndSurveyMessage(malariaSurvey);
-        }
-    }
 
     @Override
     public boolean beforeExit(boolean isBackPressed) {
@@ -575,9 +565,9 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
         mDashboardActivity.setCurrentFragment(statusFragment);
     }
 
-    public void showEndSurveyMessage(SurveyDB surveyDB) {
+    public void verifyFinalActionsAndShowEndSurveyMessage(SurveyDB surveyDB) {
         if (surveyDB != null && !noIssueVoucher(surveyDB) && !hasPhone(surveyDB)) {
-            final String voucherUId = surveyDB.getVoucherUid();
+            final String voucherUId = surveyDB.getVisibleVoucherUid();
 
             GetSettingsUseCase getSettingsUseCase = new GetSettingsUseCase(new UIThreadExecutor(),
                     new AsyncExecutor(),
@@ -585,17 +575,61 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
             getSettingsUseCase.execute(new GetSettingsUseCase.Callback() {
                 @Override
                 public void onSuccess(Settings setting) {
-                    DialogInterface.OnClickListener onClickListener = null;
+                    DialogInterface.OnClickListener onClickOKListener = null;
+
                     if (setting.isElementActive()) {
-                        onClickListener = createOnClickListenerToSendVoucherToExternalApp(
+                        onClickOKListener = createOnClickListenerToSendVoucherToExternalApp(
                                 voucherUId, mDashboardActivity);
                     }
 
-                    mDashboardActivity.showException(mDashboardActivity, "", String.format(
-                            translate(R.string.give_voucher),
-                            voucherUId), onClickListener);
+                    showEndSurveyMessage(voucherUId, onClickOKListener);
                 }
             });
+        }
+    }
+
+
+    public void showEndSurveyMessage(final String voucherUId,
+            DialogInterface.OnClickListener onClickOKListener) {
+        final String dialogMessage = String.format(translate(R.string.give_voucher),voucherUId);
+
+        new AlertDialog.Builder(mDashboardActivity)
+                .setCancelable(false)
+                .setTitle("")
+                .setMessage(dialogMessage)
+                .setNeutralButton(R.string.action_ok, onClickOKListener)
+                .setNegativeButton(R.string.action_copy, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        copyVoucherUID(voucherUId);
+                    }
+                })
+                .setPositiveButton(R.string.action_share, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        shareVoucherUID(voucherUId);
+                    }
+                })
+
+                .create().show();
+    }
+
+    private void shareVoucherUID(String voucherUId) {
+        Intent sendIntent = new Intent();
+        sendIntent.setAction(Intent.ACTION_SEND);
+        sendIntent.putExtra(Intent.EXTRA_TEXT, voucherUId);
+        sendIntent.setType("text/plain");
+        mDashboardActivity.startActivity(sendIntent);
+    }
+
+    public void copyVoucherUID(String voucherUId) {
+        ClipboardManager clipboard = (ClipboardManager)
+                mDashboardActivity.getSystemService(Context.CLIPBOARD_SERVICE);
+
+        ClipData clip = ClipData.newPlainText("",voucherUId);
+
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(clip);
         }
     }
 
@@ -664,10 +698,13 @@ public class DashboardActivityStrategy extends ADashboardActivityStrategy {
     }
 
     @Override
-    public void exitReview(boolean fromSurveyList) {
+    public void exitReview(boolean fromSurveyList, String surveyUid, boolean afterCompletion) {
         if (!DynamicTabAdapter.isClicked) {
             DynamicTabAdapter.isClicked = true;
-            sendSurvey();
+            if (afterCompletion){
+                SurveyDB surveyDB = SurveyDB.findByUid(surveyUid);
+                verifyFinalActionsAndShowEndSurveyMessage(surveyDB);
+            }
             mDashboardActivity.closeSurveyFragment();
             DynamicTabAdapter.isClicked = false;
         }

@@ -148,18 +148,17 @@ public class SurveyLocalDataSource implements ISurveyRepository {
                     userDB, survey.getType());
             surveyDB.save();
         }
+
+        surveyDB.setEventDate(survey.getSurveyDate());
+        surveyDB.setVoucherUid(survey.getVoucherUid());
+        surveyDB.setVisibleVoucherUid(survey.getVisibleVoucherUid());
+        surveyDB.setEventUid(survey.getUid());
         surveyDB.setStatus(survey.getStatus());
+
+
         surveyDB.update();
-        setSurveyOnSession(surveyDB);
         return surveyDB.getId_survey();
     }
-
-    private void setSurveyOnSession(SurveyDB surveyDB) {
-        if(surveyDB.getType() == Constants.SURVEY_NO_TYPE){
-            Session.setMalariaSurveyDB(surveyDB);
-        }
-    }
-
 
     public List<Survey> getSurveysByProgram(String uid) {
         List<SurveyDB> surveysDB = SurveyDB.getAllSurveysByProgram(uid);
@@ -169,6 +168,13 @@ public class SurveyLocalDataSource implements ISurveyRepository {
             surveys.add(mapSurvey(surveyDB));
         }
         return surveys;
+    }
+
+    @Override
+    public Survey getSurveyByUid(String uid) {
+        SurveyDB surveyDB = SurveyDB.findByUid(uid);
+
+        return mapSurvey(surveyDB);
     }
 
     @Override
@@ -218,7 +224,8 @@ public class SurveyLocalDataSource implements ISurveyRepository {
                 orgUnitUid,
                 userDB.getUid(),
                 surveyDB.getType(),
-                values);
+                values,
+                surveyDB.getVisibleVoucherUid());
 
         return survey;
     }
