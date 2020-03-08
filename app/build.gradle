@@ -9,7 +9,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'io.fabric.tools:gradle:1.27.1'
+        classpath 'io.fabric.tools:gradle:1.31.2'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.4'
         classpath 'com.google.gms:google-services:3.0.0'
     }
@@ -28,8 +28,6 @@ android {
     signingConfigs {
         config {}
     }
-
-    flavorDimensions "default"
 
     sourceSets {
         String sharedTestDir = 'src/sharedTest/java'
@@ -117,6 +115,9 @@ android {
         exclude 'META-INF/dependencies.txt'
         exclude 'META-INF/LGPL2.1'
     }
+
+    flavorDimensions "default"
+
     productFlavors {
         cambodia {
             applicationId 'org.eyeseetea.surveillance_kh_dev'
@@ -283,7 +284,6 @@ android {
         disable 'RtlSymmetry', 'RtlHardcoded'
         checkReleaseBuilds false
     }
-
     configurations.all {
         resolutionStrategy.force "com.google.code.findbugs:jsr305:${libs.jsr305Version}"
     }
